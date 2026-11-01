@@ -17,7 +17,10 @@ export function setApiSessionToken(token?: string | null) {
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
-  if (fallbackSessionToken && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${fallbackSessionToken}`);
+  if (fallbackSessionToken) {
+    if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${fallbackSessionToken}`);
+    if (!headers.has('X-AIHolding-Session')) headers.set('X-AIHolding-Session', fallbackSessionToken);
+  }
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   const response = await fetch(path.startsWith('/api') ? path : `/api${path}`, {
     ...options,

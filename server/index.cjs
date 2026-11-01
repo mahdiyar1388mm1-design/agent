@@ -90,7 +90,8 @@ function userFromToken(token) {
 function currentUser(req) {
   const authorization = String(req.get('authorization') || '');
   const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1] || '';
-  for (const token of [readCookie(req, 'aiholding_session'), bearer]) {
+  const sessionHeader = String(req.get('x-aiholding-session') || '');
+  for (const token of [readCookie(req, 'aiholding_session'), bearer, sessionHeader]) {
     const user = userFromToken(token);
     if (user) return user;
   }
