@@ -104,13 +104,14 @@ test('non-Windows hosts never silently execute model commands in a different she
 
 test('model PowerShell gets bundled Git/gh on its child-only PATH without a system install', async (t) => {
   const f = fixture(t); const root = path.join(f.cwd, 'resources');
+  t.after(() => f.runner.stop());
   for (const relative of ['git/cmd/git.exe', 'gh/bin/gh.exe']) {
     const file = path.join(root, 'tools', relative); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'fixture');
   }
   f.runner.resourcesPath = root;
   const pending = f.runner.run('git --version; gh --version', f.cwd);
-  assert.ok(f.calls[0].options.env.PATH.includes(path.win32.dirname(path.join(root, 'tools/git/cmd/git.exe'))));
-  assert.ok(f.calls[0].options.env.PATH.includes(path.win32.dirname(path.join(root, 'tools/gh/bin/gh.exe'))));
+  assert.ok(f.calls[0].options.env.PATH.includes(path.win32.dirname(fs.realpathSync.native(path.join(root, 'tools/git/cmd/git.exe')))));
+  assert.ok(f.calls[0].options.env.PATH.includes(path.win32.dirname(fs.realpathSync.native(path.join(root, 'tools/gh/bin/gh.exe')))));
   assert.equal(f.runner.env.PATH, 'normal-path');
   f.child.emit('close', 0); await pending;
 });
