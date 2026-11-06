@@ -1,0 +1,51 @@
+name: Arena Desktop / Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/arena-desktop-windows.yml'
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/arena-desktop-windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test and build Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: desktop
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check, test and package
+        run: npm run dist:win
+      - name: Launch the real packaged app offline on Windows
+        shell: pwsh
+        run: ./scripts/smoke-windows.ps1
+      - name: Upload installer and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arena-Desktop-Windows-x64
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/SHA256SUMS.txt
+            desktop/dist/README.fa.md
+          if-no-files-found: error
+          retention-days: 30

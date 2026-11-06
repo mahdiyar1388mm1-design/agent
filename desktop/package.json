@@ -1,0 +1,28 @@
+{
+  "name": "arena-desktop-unofficial",
+  "productName": "Arena Desktop",
+  "version": "1.0.0",
+  "description": "An unofficial, security-conscious Windows desktop wrapper for arena.ai.",
+  "author": "mahdiyar1388mm1-design",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "src/main.cjs",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer/shell.js && node --check scripts/check-package.cjs",
+    "test": "node --test",
+    "dist:win": "npm run check && npm test && electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never && node scripts/check-package.cjs --installer",
+    "pack:win": "electron-builder --config electron-builder.config.cjs --win --x64 --dir --publish never && node scripts/check-package.cjs"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "resedit": "3.1.0",
+    "@electron/asar": "3.4.1",
+    "@electron/fuses": "1.8.0"
+  }
+}

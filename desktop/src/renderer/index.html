@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="color-scheme" content="dark">
+  <title>Arena Desktop — غیررسمی</title>
+  <link rel="stylesheet" href="shell.css">
+  <script src="shell.js" defer></script>
+</head>
+<body>
+  <header class="toolbar" aria-label="ابزارهای برنامه">
+    <button class="brand" data-action="home" title="صفحهٔ اصلی Arena" aria-label="صفحهٔ اصلی Arena">
+      <img src="../../assets/icon.svg" width="38" height="38" alt="">
+      <span class="brand-text"><strong>Arena <span>Desktop</span></strong><small>نسخهٔ غیررسمی</small></span>
+    </button>
+    <span class="divider" aria-hidden="true"></span>
+    <nav class="navigation" aria-label="پیمایش">
+      <button class="icon-button" id="back" data-action="back" disabled title="بازگشت (Alt + ←)" aria-label="بازگشت">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg>
+      </button>
+      <button class="icon-button" id="forward" data-action="forward" disabled title="جلو (Alt + →)" aria-label="جلو">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5 7 7-7 7M5 12h14"/></svg>
+      </button>
+      <button class="icon-button" id="reload" data-action="reload" title="بارگذاری دوباره (Ctrl + R)" aria-label="بارگذاری دوباره">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 18 17"/></svg>
+      </button>
+    </nav>
+    <div class="address" aria-label="میزبان صفحه">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v9H6zM8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      <span id="origin">arena.ai</span>
+      <span class="connection" id="connection" role="status"><i></i><span id="connection-label">در حال اتصال</span></span>
+    </div>
+    <button class="browser-button" data-action="open-browser" title="بازکردن Arena در مرورگر پیش‌فرض">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg>
+      <span>مرورگر</span>
+    </button>
+    <button class="icon-button menu-button" data-action="menu" title="منو، تنظیمات و راهنما" aria-label="منو، تنظیمات و راهنما">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/></svg>
+    </button>
+  </header>
+
+  <main id="placeholder" class="placeholder" aria-busy="true">
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+    <section class="welcome" id="welcome" aria-labelledby="welcome-title">
+      <span class="eyebrow"><span></span> یک پنجره، دنیایی از مدل‌ها</span>
+      <img class="hero-icon" src="../../assets/icon.svg" width="96" height="96" alt="">
+      <h1 id="welcome-title"><bdi>Arena</bdi>، روی دسکتاپ شما.</h1>
+      <p class="lead">همان تجربهٔ آنلاین؛ با فضایی مستقل برای گفت‌وگو و مقایسه.</p>
+      <div class="loading-line" role="status"><span class="loader" aria-hidden="true"></span>در حال بازکردن <bdi>arena.ai</bdi></div>
+      <p id="loading-hint" class="hint">ارتباط امن با سایت در حال برقراری است.</p>
+      <div class="actions" id="slow-actions" hidden>
+        <button class="primary-button" data-action="reload">تلاش دوباره</button>
+        <button class="secondary-button" data-action="open-browser">بازکردن در مرورگر</button>
+      </div>
+    </section>
+    <section class="error-card" id="error-card" hidden aria-labelledby="error-title" role="alert">
+      <div class="error-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v5m0 3h.01M10.3 4.8 2.5 18.3A1.8 1.8 0 0 0 4 21h16a1.8 1.8 0 0 0 1.5-2.7L13.7 4.8a2 2 0 0 0-3.4 0Z"/></svg></div>
+      <span class="eyebrow">بیایید دوباره امتحان کنیم</span>
+      <h1 id="error-title">ارتباط برقرار نشد.</h1>
+      <p id="error-message" class="lead">اتصال اینترنت را بررسی کنید و دوباره تلاش کنید.</p>
+      <code id="error-code" class="error-code" dir="ltr"></code>
+      <div class="actions">
+        <button class="primary-button" data-action="reload">تلاش دوباره</button>
+        <button class="secondary-button" data-action="open-browser">بازکردن در مرورگر</button>
+      </div>
+      <p class="hint">اگر ورود یا بررسی امنیتی سایت در برنامه انجام نشد، از مرورگر استفاده کنید.</p>
+    </section>
+    <footer class="disclaimer">
+      <span class="footer-mark">ARENA DESKTOP <span>/</span> UNOFFICIAL</span>
+      <p>مستقل و غیررسمی؛ وابسته یا مورد تأیید Arena نیست. نیازمند اینترنت است.</p>
+    </footer>
+  </main>
+</body>
+</html>

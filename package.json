@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "desktop:install": "npm --prefix desktop ci",
+    "desktop:dev": "npm --prefix desktop start",
+    "desktop:test": "npm --prefix desktop test",
+    "desktop:build:win": "npm --prefix desktop run dist:win"
   },
   "dependencies": {
     "@fontsource-variable/space-grotesk": "^5.3.0",
