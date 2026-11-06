@@ -122,14 +122,28 @@ class TerminalAgent {
     const prepared = await this.site('prepare', message);
     verify();
     if (!prepared.ok) throw new Error(this.adapterError(prepared.reason));
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    await this.sendPrepared(message, verify);
+  }
+
+  async sendPrepared(message, verify) {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
       await this.sleep(200); verify();
-      const sent = await this.site('send', message);
-      guard();
-      if (sent.ok) return;
+      const sent = await this.site('send', message); verify();
+      if (sent.ok) {
+        if (sent.reason === 'clicked' && sent.accepted !== true) {
+          for (let check = 0; check < 18; check += 1) {
+            await this.sleep(200); verify();
+            const accepted = await this.site('confirm-send', message); verify();
+            if (accepted.ok) return;
+            if (accepted.reason !== 'send-pending') throw new Error(this.adapterError(accepted.reason));
+          }
+          throw new Error('روی ارسال کلیک شد ولی سایت پیام را نپذیرفت؛ پیام در پیش‌نویس باقی است. برای جلوگیری از ارسال تکراری دوباره کلیک نکردیم. کادر/مدل انتخابی و اتصال سایت را بررسی کنید.');
+        }
+        return;
+      }
       if (sent.reason !== 'send-disabled') throw new Error(this.adapterError(sent.reason));
     }
-    throw new Error('ارسال تأیید نشد؛ پیش‌نویس را بررسی کنید. پیام دوباره ارسال نمی‌شود.');
+    throw new Error('دکمهٔ ارسال سایت فعال نشد؛ پیام ارسال نشده و پیش‌نویس حفظ شده است. مدل/حالت چت و اتصال سایت را بررسی کنید.');
   }
 
   async start(payload) {
@@ -187,21 +201,22 @@ class TerminalAgent {
     if (epoch !== this.epoch || !this.session) throw new Error('جلسه قطع شده است.');
     const prepared = await this.site('prepare', message);
     if (!prepared.ok) throw new Error(this.adapterError(prepared.reason));
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await this.sleep(200);
+    await this.sendPrepared(message, () => {
       if (epoch !== this.epoch || !this.session) throw new Error('جلسه قطع شده است.');
-      const sent = await this.site('send', message);
-      if (epoch !== this.epoch || !this.session) throw new Error('جلسه قطع شده است.');
-      if (sent.ok) {
-        this.session.lastActivity = this.now();
-        return;
-      }
-      if (sent.reason !== 'send-disabled') throw new Error(this.adapterError(sent.reason));
-    }
-    throw new Error('ارسال پیام تأیید نشد. پیش‌نویس در سایت باقی مانده؛ اتصال متوقف شد تا پیام تکراری ارسال نشود.');
+    });
+    this.session.lastActivity = this.now();
+  }
+
+  async diagnostics() {
+    try { return await this.site('diagnostics'); }
+    catch { return { diagnostic: 'page-unavailable', offline: false }; }
   }
 
   adapterError(reason) {
+    if (reason === 'model-busy') return 'مدل هنوز در حال پاسخ است. ابتدا پایان پاسخ یا توقف آن را صبر کنید؛ پیام دیگری ارسال نشد.';
+    if (reason === 'composer-count:0') return 'کادر پیام پیدا نشد. وارد Arena شوید، مدل و یک گفتگوی مستقیم/Agent را باز کنید؛ صفحهٔ ورود یا انتخاب پروژه کادر پیام نیست.';
+    if (reason?.startsWith('composer-count:')) return 'چند کادر پیام هم‌زمان پیدا شد؛ برای جلوگیری از ارسال به محل اشتباه، فقط یک گفتگوی فعال باز نگه دارید.';
+    if (reason?.startsWith('send-button-count:')) return 'دکمهٔ ارسال یکتای همان کادر پیدا نشد. از عیب‌یابی، وضعیت کادر را بررسی کنید؛ ممکن است این حالت رابط پشتیبانی نشود.';
     if (reason === 'draft-present' || reason === 'draft-changed') return 'پیش‌نویس فعلی گفتگو را تغییر نمی‌دهیم. آن را خودتان ارسال/پاک کنید و جلسه را دوباره شروع کنید.';
     return `ارتباط با کادر پیام برقرار نشد (${reason}). ساختار سایت ممکن است تغییر کرده باشد؛ اتصال متوقف شد.`;
   }
@@ -230,7 +245,13 @@ class TerminalAgent {
         if (request) requests.set(JSON.stringify(request), request);
       }
       if (requests.size > 1) throw new Error('چند درخواست متفاوت پیدا شد؛ اتصال متوقف شد. فقط یک درخواست‌کننده در هر گفتگو پشتیبانی می‌شود.');
-      if (requests.size === 0) { this.stable = ''; return; }
+      if (requests.size === 0) {
+        this.stable = '';
+        if (this.now() - this.session.lastActivity > 45000 && this.state.message !== 'هنوز فرمان سازگار از مدل نرسیده است؛ ممکن است مدل فقط ابزار ابری خودش را اجرا کرده یا قرارداد پیام را رعایت نکرده باشد. عیب‌یابی را بررسی کنید.') {
+          this.update({ message: 'هنوز فرمان سازگار از مدل نرسیده است؛ ممکن است مدل فقط ابزار ابری خودش را اجرا کرده یا قرارداد پیام را رعایت نکرده باشد. عیب‌یابی را بررسی کنید.' });
+        }
+        return;
+      }
       const [[fingerprint, request]] = requests;
       // Wait for the same complete JSON in two snapshots, not partial streaming text.
       if (this.stable !== fingerprint) { this.stable = fingerprint; return; }

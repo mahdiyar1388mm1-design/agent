@@ -19,6 +19,7 @@ async function setup(t, { lock = true } = {}) {
   const windows = [];
   const views = [];
   const opened = [];
+  const copied = [];
   const dialogs = [];
   const responses = [];
   const handlers = new Map();
@@ -112,6 +113,7 @@ async function setup(t, { lock = true } = {}) {
       showMessageBox: async (_window, options) => { dialogs.push(options); return { response: responses.shift() ?? 1 }; },
       showErrorBox: (...args) => dialogs.push(args),
     },
+    clipboard: { writeText: (text) => copied.push(text) },
     ipcMain: { handle: (name, callback) => handlers.set(name, callback) },
     session: { fromPartition: () => profile },
     shell: { openExternal: async (url) => opened.push(url) },
@@ -130,7 +132,7 @@ async function setup(t, { lock = true } = {}) {
   const window = windows[0];
   const event = window ? { sender: window.webContents, senderFrame: window.webContents.mainFrame } : {};
   return {
-    windows, views, window, view: views[0], opened, dialogs, responses, handlers, profile, paths, terminalAgent, githubProjects,
+    windows, views, window, view: views[0], opened, copied, dialogs, responses, handlers, profile, paths, terminalAgent, githubProjects,
     quit: () => quit,
     state: () => handlers.get('arena:state')(event),
     action: (action) => handlers.get('arena:action')(event, action),
@@ -348,4 +350,27 @@ test('GitHub mutations cannot overlap terminal sessions; opening a local session
   assert.equal(app.githubProjects.snapshot().watching, false);
   app.terminalAgent.session = { id: 'local-session', seq: 1 };
   await assert.rejects(app.githubProjects.operationFor('fixture', async () => {}), /ترمینال/);
+});
+
+test('diagnostics uses the exact local frame, requires explicit copy, and never grants execution or exports content', async (t) => {
+  const app = await setup(t);
+  const action = app.handlers.get('arena:action');
+  assert.throws(() => action({ sender: app.view.webContents, senderFrame: app.view.webContents.mainFrame }, 'diagnostics'), /Untrusted/);
+  assert.throws(() => action({ sender: app.window.webContents, senderFrame: { url: app.window.webContents.getURL() } }, 'diagnostics'), /Untrusted/);
+  const originalUrl = app.window.webContents.mainFrame.url;
+  app.window.webContents.mainFrame.url = 'https://arena.ai/not-the-local-shell';
+  assert.throws(() => app.action('diagnostics'), /Untrusted/);
+  app.window.webContents.mainFrame.url = originalUrl;
+  assert.equal(app.dialogs.length, 0);
+  let reads = 0;
+  app.terminalAgent.siteOverride = async (action) => { assert.equal(action, 'diagnostics'); reads += 1;
+    return { diagnostic: 'ready', composerCount: 1, sendButtonCount: 1, composerKind: 'textarea', private: 'PRIVATE_CHAT' }; };
+  app.githubProjects.tools.detect = async () => { throw new Error('Diagnostic must not launch tools or GitHub requests'); };
+  app.responses.push(1); await app.action('diagnostics');
+  assert.equal(app.copied.length, 0); assert.equal(app.dialogs.at(-1).defaultId, 1);
+  app.responses.push(0); await app.action('diagnostics');
+  assert.equal(reads, 2); assert.equal(app.copied.length, 1);
+  assert.doesNotMatch(app.copied[0], /PRIVATE_CHAT/);
+  assert.equal(JSON.parse(app.copied[0]).adapter.result, 'ready');
+  assert.equal(app.terminalAgent.snapshot().session, null); assert.equal(app.githubProjects.snapshot().checked, false);
 });

@@ -1,7 +1,7 @@
 'use strict';
 
 const { contextBridge, ipcRenderer } = require('electron');
-const actions = new Set(['back', 'forward', 'reload', 'home', 'open-browser', 'menu', 'terminal', 'github']);
+const actions = new Set(['back', 'forward', 'reload', 'home', 'open-browser', 'menu', 'terminal', 'github', 'diagnostics']);
 
 const terminalActions = new Set(['choose-folder', 'start', 'approve', 'reject', 'share', 'disable']);
 

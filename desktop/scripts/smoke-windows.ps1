@@ -15,7 +15,7 @@ try {
     $process = Start-Process -FilePath (Resolve-Path $executable).Path `
         -ArgumentList '--arena-self-test' -RedirectStandardOutput $stdout `
         -RedirectStandardError $stderr -PassThru
-    if (-not $process.WaitForExit(15000)) {
+    if (-not $process.WaitForExit(60000)) {
         throw 'Packaged preload/terminal IPC diagnostic timed out.'
     }
     $process.WaitForExit()
@@ -24,7 +24,10 @@ try {
         $detail = Get-Content $stderr -Raw -ErrorAction SilentlyContinue
         throw "Packaged preload/terminal IPC diagnostic failed: $report $detail"
     }
-    Write-Host 'Packaged terminal bridge IPC passed; terminal is disabled by default.'
+    foreach ($marker in @('ARENA_DESKTOP_BUNDLED_TOOLS_SELF_TEST_OK', 'ARENA_DESKTOP_COMPOSER_SELF_TEST_OK textarea', 'ARENA_DESKTOP_COMPOSER_SELF_TEST_OK rich')) {
+        if ($report -notlike "*$marker*") { throw "Missing native compatibility marker: $marker" }
+    }
+    Write-Host 'Packaged IPC, bundled Git/gh and native textarea/rich-editor message checks passed; terminal stays disabled.'
     $process = Start-Process -FilePath (Resolve-Path $executable).Path `
         -ArgumentList '--host-resolver-rules="MAP * ~NOTFOUND"' -PassThru
     if ($process.WaitForExit(12000)) {

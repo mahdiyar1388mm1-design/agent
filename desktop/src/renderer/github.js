@@ -21,7 +21,7 @@
     const project = state.project;
     const bound = Boolean(project?.isGit && project.repo && project.branch && project.head);
     byId('github-toggle').dataset.status = state.watching ? 'watching' : state.status;
-    byId('github-dependencies').textContent = !state.checked ? 'Git و GitHub CLI هنوز بررسی نشده‌اند.' : `Git: ${state.dependencies?.git ? 'نصب است' : 'پیدا نشده'} | GitHub CLI: ${state.dependencies?.gh ? 'نصب است' : 'پیدا نشده'}`;
+    byId('github-dependencies').textContent = !state.checked ? 'Git و GitHub CLI هنوز بررسی نشده‌اند.' : `Git: ${state.dependencies?.git ? state.toolSources?.git === 'bundled' ? 'همراه برنامه' : 'آماده' : 'پیدا نشده'} | GitHub CLI: ${state.dependencies?.gh ? state.toolSources?.gh === 'bundled' ? 'همراه برنامه' : 'آماده' : 'پیدا نشده'}`;
     byId('github-account').textContent = state.account ? `حساب متصل: ${visible(state.account.login)}` : 'ورود حساب تأیید نشده است.';
     byId('github-device').hidden = !state.deviceCode;
     if (byId('github-device-code').value !== (state.deviceCode || '')) byId('github-device-code').value = state.deviceCode || '';
@@ -66,7 +66,7 @@
     for (const button of buttons) {
       const action = button.dataset.github;
       let disabled = locked && !concurrent.has(action);
-      if (['repositories', 'clone', 'prepare-publish', 'publish'].includes(action)) disabled ||= !state.account;
+      if (['repositories', 'prepare-publish', 'publish'].includes(action)) disabled ||= !state.account;
       if (['branches', 'select-branch', 'sync', 'watch', 'handoff', 'open-repo'].includes(action)) disabled ||= !bound;
       if (action === 'prepare-publish') disabled ||= !project;
       if (action === 'publish') disabled ||= !state.preview;

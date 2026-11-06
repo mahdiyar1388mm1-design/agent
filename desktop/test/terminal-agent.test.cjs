@@ -541,3 +541,47 @@ test('revocation after project-message preparation prevents clicking Send', asyn
   await assert.rejects(f.agent.sendProjectMessage('Project context', () => { if (revoked) throw new Error('revoked'); }), /revoked/);
   assert.equal(f.messages.length, 0); assert.equal(f.calls.length, 0);
 });
+
+test('disabled Send retries activation, then waits for UI acceptance without reclicking', async (t) => {
+  const f = await fixture(t); let sends = 0; let confirms = 0;
+  f.setSiteHook(async (action) => {
+    if (action === 'send') return ++sends < 3 ? { ok: false, reason: 'send-disabled' } : { ok: true, reason: 'clicked', accepted: false };
+    if (action === 'confirm-send') return ++confirms < 3 ? { ok: false, reason: 'send-pending' } : { ok: true, reason: 'accepted' };
+  });
+  await f.start();
+  assert.equal(f.agent.snapshot().status, 'waiting');
+  assert.equal(sends, 3); assert.equal(confirms, 3); assert.equal(f.calls.length, 0);
+});
+
+test('an unacknowledged click pauses with preserved draft, never resends and revokes grants', async (t) => {
+  const f = await fixture(t); let sends = 0;
+  f.setSiteHook(async (action) => {
+    if (action === 'send') { sends += 1; return { ok: true, reason: 'clicked', accepted: false }; }
+    if (action === 'confirm-send') return { ok: false, reason: 'send-pending' };
+  });
+  await f.start({ autoExecute: true, autoShare: true });
+  assert.equal(sends, 1); assert.equal(f.agent.snapshot().status, 'paused');
+  assert.equal(f.agent.snapshot().autoExecute, false); assert.equal(f.agent.snapshot().autoShare, false);
+  assert.match(f.agent.snapshot().message, /سایت پیام را نپذیرفت/);
+  assert.match(f.data.draft, /Inspect this project/); assert.equal(f.calls.length, 0);
+});
+
+test('Stop while awaiting UI acceptance prevents a late completion from restoring the session', async (t) => {
+  const f = await fixture(t); let sends = 0; let confirms = 0;
+  f.setSiteHook(async (action) => {
+    if (action === 'send') { sends += 1; return { ok: true, reason: 'clicked', accepted: false }; }
+    if (action === 'confirm-send') { confirms += 1; await f.agent.disable(); return { ok: true, reason: 'accepted' }; }
+  });
+  await f.start({ autoExecute: true, autoShare: true });
+  assert.equal(sends, 1); assert.equal(confirms, 1);
+  assert.equal(f.agent.snapshot().session, null); assert.equal(f.agent.snapshot().status, 'ready');
+  assert.equal(f.agent.snapshot().autoExecute, false); assert.equal(f.agent.snapshot().autoShare, false);
+  assert.equal(f.calls.length, 0);
+});
+
+test('no compatible model request produces a useful warning without inventing/running a command', async (t) => {
+  const f = await fixture(t); await f.start();
+  f.clock.value += 46000; await f.agent.poll();
+  assert.equal(f.agent.snapshot().status, 'waiting');
+  assert.match(f.agent.snapshot().message, /ابزار ابری/); assert.equal(f.calls.length, 0);
+});

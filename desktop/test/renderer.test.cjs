@@ -22,7 +22,7 @@ function setup({ bridge = true } = {}) {
     });
     return elements.get(id);
   };
-  const controls = ['back', 'forward', 'reload', 'home', 'open-browser', 'menu'].map((action) => {
+  const controls = ['back', 'forward', 'reload', 'home', 'open-browser', 'menu', 'diagnostics'].map((action) => {
     const button = element(action);
     button.dataset.action = action;
     return button;
@@ -126,4 +126,9 @@ test('opening the shell outside Electron clearly identifies it as desktop-only',
   assert.match(ui.element('error-message').textContent, /فایل نصب ویندوز/);
   assert.equal(ui.controls.every((control) => control.disabled), true);
   assert.equal(ui.timers.size, 0);
+});
+
+test('diagnostics toolbar button calls only the native allowlisted action', async () => {
+  const ui = setup(); await flush(); ui.element('diagnostics').handlers.click(); await flush();
+  assert.deepEqual(ui.calls, ['diagnostics']);
 });

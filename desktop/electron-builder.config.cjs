@@ -20,8 +20,11 @@ module.exports = {
     'README.md',
     'TERMINAL.md',
     'GITHUB.md',
+    'THIRD-PARTY.md',
+    'assets/portable-tools.json',
     'package.json',
   ],
+  extraResources: [{ from: 'build/portable-tools/tools', to: 'tools' }],
   electronFuses: {
     runAsNode: false,
     enableCookieEncryption: true,

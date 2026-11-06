@@ -4,6 +4,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
+const { bundledToolPaths, prependToolPath } = require('./tool-paths.cjs');
 const { validCommand } = require('./terminal-protocol.cjs');
 
 class PowerShellRunner {
@@ -11,6 +12,7 @@ class PowerShellRunner {
     this.platform = options.platform || process.platform;
     this.spawn = options.spawn || spawn;
     this.env = options.env || process.env;
+    this.resourcesPath = options.resourcesPath || process.resourcesPath;
     this.timeoutMs = options.timeoutMs ?? 120000;
     this.maxBytes = options.maxBytes ?? 131072;
     this.job = null;
@@ -31,6 +33,7 @@ class PowerShellRunner {
     for (const key of Object.keys(environment)) {
       if (/^(?:ELECTRON_|NODE_OPTIONS$|NODE_INSPECT_RESUME_ON_START$)/i.test(key)) delete environment[key];
     }
+    prependToolPath(environment, Object.values(bundledToolPaths(this.resourcesPath, this.platform)), this.platform);
     const script = '$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false);\n' + command;
     let resolveResult;
     const done = new Promise((resolve) => { resolveResult = resolve; });

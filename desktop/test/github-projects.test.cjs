@@ -445,3 +445,32 @@ nativeTest('selecting an Agent branch cannot overwrite a conflicting ignored loc
   assert.equal(fs.readFileSync(path.join(folder, 'local-only.txt'), 'utf8'), 'keep original local file');
   assert.equal((await f.native(['branch', '--show-current'], folder)).trim(), 'main');
 });
+
+nativeTest('anonymous public clone/default branch and branch listing never require gh or an account API', async (t) => {
+  const f = await fixture(t);
+  f.manager.update({ account: null });
+  f.tools.detect = async () => ({ git: gitPath, gh: null });
+  f.data.ghHook = () => { throw new Error('No account or GitHub CLI dependency is allowed for anonymous public Git'); };
+  const before = f.ghCalls.length;
+  const state = await f.clone('');
+  assert.equal(state.project.branch, 'main'); assert.equal(f.ghCalls.length, before);
+  await f.native(['branch', 'arena/agent-work']);
+  await f.native(['push', 'origin', 'refs/heads/arena/agent-work']);
+  const branches = await f.manager.listBranches();
+  assert.equal(branches.status, 'ready', branches.message);
+  assert.ok(branches.branches.includes('main')); assert.ok(branches.branches.includes('arena/agent-work'));
+  assert.equal(f.ghCalls.length, before);
+});
+
+nativeTest('Stop during asynchronous system proxy resolution prevents any late Git spawn', async (t) => {
+  const f = await fixture(t); await f.manager.chooseParent(); f.responses.push(0);
+  let resolveProxy; let announce;
+  const pending = new Promise((resolve) => { announce = resolve; });
+  f.tools.configureProxy = () => { announce(); return new Promise((resolve) => { resolveProxy = resolve; }); };
+  const before = f.gitCalls.length;
+  const clone = f.manager.clone({ repository: f.repo.fullName, branch: 'main' });
+  await pending; await f.manager.cancel(); resolveProxy({ HTTPS_PROXY: 'http://proxy.invalid:8080' });
+  await clone;
+  assert.equal(f.gitCalls.length, before); assert.equal(f.manager.snapshot().project, null);
+  assert.equal(f.manager.snapshot().busy, false);
+});

@@ -91,3 +91,10 @@ test('GitHub preload exposes only named project actions and strips subscription 
   dispose();
   assert.equal(ipc.listenerCount('arena:github-state-changed'), 0);
 });
+
+test('diagnostics is a single named native action, not a report/arbitrary IPC export primitive', async () => {
+  const { bridge, calls } = loadBridge();
+  await bridge.perform('diagnostics');
+  assert.deepEqual(calls, [['arena:action', 'diagnostics']]);
+  assert.equal(bridge.copyReport, undefined); assert.equal(bridge.readChat, undefined);
+});

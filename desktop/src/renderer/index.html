@@ -46,6 +46,7 @@
     <button class="terminal-button" id="terminal-toggle" data-action="terminal" title="ترمینال محلی AI — آزمایشی" aria-label="بازکردن ترمینال محلی AI">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 6 6-6 6m8 0h6"/></svg><span>ترمینال AI</span>
     </button>
+    <button class="browser-button" id="diagnostics" data-action="diagnostics" title="بررسی اتصال بدون ارسال متن چت یا اجرای فرمان" aria-label="عیب‌یابی اتصال"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 3 3 1v6l-3 1-1 3H9l-1-3-3-1V7l3-1zM10 9h4v4h-4z"/></svg><span>عیب‌یابی</span></button>
     <button class="icon-button menu-button" data-action="menu" title="منو، تنظیمات و راهنما" aria-label="منو، تنظیمات و راهنما">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/></svg>
     </button>
@@ -141,7 +142,7 @@
       <div class="terminal-controls"><button class="secondary-button" data-github="check">بررسی اتصال</button><button class="primary-button" data-github="login">ورود در مرورگر</button></div>
       <div class="github-tool-links"><button data-github="install-git">نصب رسمی Git ↗</button><button data-github="install-gh">نصب رسمی GitHub CLI ↗</button></div>
       <div id="github-device" class="github-device" hidden><label for="github-device-code">کد یک‌بارمصرف؛ فقط در github.com/login/device</label><input id="github-device-code" readonly dir="ltr" autocomplete="off"><button class="secondary-button" data-github="open-device">بازکردن صفحهٔ ورود GitHub</button></div>
-      <p class="hint">رمز یا توکن را در چت وارد نکن. ورود با gh سیستم انجام می‌شود؛ اعتبارنامه در محل نگهداری خود gh می‌ماند، نه در پیام Agent. Git و gh باید جداگانه نصب باشند.</p>
+      <p class="hint">رمز یا توکن را در چت وارد نکن. ورود با gh سیستم انجام می‌شود؛ اعتبارنامه در محل نگهداری خود gh می‌ماند، نه در پیام Agent. Git و GitHub CLI در این نسخه همراه برنامه‌اند؛ نصب جداگانه لازم نیست.</p>
     </section>
     <section class="github-section" aria-labelledby="github-import-title">
       <h3 id="github-import-title">۲ / انتخاب یا دانلود پروژه</h3>
@@ -150,7 +151,7 @@
       <label class="terminal-label" for="github-repository">یا آدرس مخزن عمومی، خصوصی یا مشترک</label><input id="github-repository" maxlength="350" dir="ltr" placeholder="owner/repository یا https://github.com/owner/repository" spellcheck="false">
       <label class="terminal-label" for="github-branch">شاخهٔ دانلود؛ خالی = شاخهٔ پیش‌فرض مخزن</label><input id="github-branch" maxlength="200" dir="ltr" placeholder="main یا arena/…" spellcheck="false">
       <div class="terminal-controls"><button class="secondary-button" data-github="choose-parent">پوشهٔ والد دانلود</button><button class="primary-button" data-github="clone">دانلود پروژه</button></div><p id="github-parent" class="github-path">پوشهٔ والد انتخاب نشده است.</p>
-      <p class="hint">در زیرپوشهٔ تازه clone می‌شود؛ مقصد موجود جایگزین نمی‌شود. دانلود، نصب یا اجرای خودکار کد نیست. برای شاخهٔ دیگری، آن را هنگام دانلود مشخص کن یا با Git خودت checkout کن.</p>
+      <p class="hint">مخزن عمومی بدون ورود هم قابل دریافت است؛ مخزن خصوصی ورود لازم دارد. در زیرپوشهٔ تازه clone می‌شود؛ مقصد موجود جایگزین نمی‌شود. دانلود، نصب یا اجرای خودکار کد نیست. برای شاخهٔ دیگری، آن را هنگام دانلود مشخص کن یا با Git خودت checkout کن.</p>
     </section>
     <section class="github-section" id="github-selected-section" hidden>
       <h3>پروژهٔ انتخاب‌شده</h3><pre id="github-project" class="terminal-pre" dir="ltr"></pre><button class="secondary-button" data-github="open-repo">مشاهدهٔ مخزن در مرورگر ↗</button>

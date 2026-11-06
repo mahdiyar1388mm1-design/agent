@@ -70,3 +70,11 @@ test('project task edits survive status packets and revoked watch cannot be rest
   assert.equal(ui.calls[0].payload.task, 'My current task');
   ui.finish({ ...ui.initial, revision: 5, project }); await flush();
 });
+
+test('anonymous public clone and branch listing stay available without enabling authenticated publication', async (t) => {
+  const ui = await fixture(t);
+  ui.update({ revision: 1, checked: true, account: null, parent: 'C:\\downloads', project, toolSources: { git: 'bundled', gh: 'bundled' } });
+  assert.equal(ui.button('clone').disabled, false); assert.equal(ui.button('branches').disabled, false);
+  assert.equal(ui.button('prepare-publish').disabled, true); assert.equal(ui.button('repositories').disabled, true);
+  assert.match(ui.byId('github-dependencies').textContent, /همراه برنامه/);
+});

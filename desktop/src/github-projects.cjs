@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const { githubIssue } = require('./github-errors.cjs');
 const { GitHubTools, safeError } = require('./github-tools.cjs');
 const { isTerminalSiteUrl } = require('./policy.cjs');
 const { repository, branchName, folderName, safeRelative, excludedFile, sensitiveContent, projectMessage,
@@ -23,7 +24,7 @@ class GitHubProjects {
     this.onProject = options.onProject || (() => {});
     this.onHandoff = options.onHandoff;
     this.onUpdate = options.onUpdate || (() => {});
-    this.tools = options.tools || new GitHubTools();
+    this.tools = options.tools || new GitHubTools({ resolveProxy: options.resolveProxy });
     this.now = options.now || Date.now;
     this.autoPoll = options.autoPoll !== false;
     this.epoch = 0;
@@ -33,8 +34,8 @@ class GitHubProjects {
     this.timer = null;
     this.expiryTimer = null;
     this.revision = 0;
-    this.state = { status: 'idle', message: 'ابتدا Git و GitHub CLI را بررسی و حساب خود را وصل کنید.',
-      dependencies: { git: null, gh: null }, checked: false, account: null, repositories: [], branches: [], project: null,
+    this.state = { status: 'idle', message: 'ابزارهای همراه را بررسی کنید؛ مخزن عمومی بدون ورود و مخزن خصوصی با حساب GitHub خودتان قابل دریافت است.',
+      toolSources: {}, lastIssue: null, dependencies: { git: null, gh: null }, checked: false, account: null, repositories: [], branches: [], project: null,
       parent: '', deviceCode: null, preview: null, lastSync: null };
   }
 
@@ -63,12 +64,13 @@ class GitHubProjects {
     if (this.isTerminalActive()) throw new Error('ابتدا جلسهٔ ترمینال AI را قطع کنید.');
     const op = { epoch: ++this.epoch, kind, watch: kind === 'watch' ? this.watch : null };
     this.operation = op;
-    this.update({ status: 'working', deviceCode: null, message: 'در حال انجام عملیات GitHub…' });
+    this.update({ status: 'working', deviceCode: null, lastIssue: null, message: 'در حال انجام عملیات GitHub…' });
     try { await work(op); }
     catch (error) {
       if (op.epoch === this.epoch) {
         if (['watch', 'sync', 'branch', 'prepare', 'project'].includes(kind)) this.revokeWatch();
-        this.update({ status: 'error', message: safeError(error.message), deviceCode: null });
+        const issue = githubIssue(error.message);
+        this.update({ status: 'error', lastIssue: issue, message: [safeError(error.message), issue.hint].filter(Boolean).join('\n\n'), deviceCode: null });
       }
     } finally {
       if (this.operation === op) {
@@ -83,6 +85,10 @@ class GitHubProjects {
 
   async git(op, args, folder, options = {}) {
     this.assert(op);
+    if (args.some((arg) => ['clone', 'fetch', 'push', 'ls-remote'].includes(arg))) {
+      options = { ...options, networkEnv: await this.tools.configureProxy?.('https://github.com') };
+      this.assert(op);
+    }
     const result = await this.tools.git(args, folder, options);
     this.assert(op);
     if (result.stopWarning) this.update({ stopWarning: result.stopWarning });
@@ -91,6 +97,8 @@ class GitHubProjects {
   }
 
   async gh(op, args, options = {}) {
+    this.assert(op);
+    options = { ...options, networkEnv: await this.tools.configureProxy?.(args[0] === 'auth' ? 'https://github.com' : 'https://api.github.com') };
     this.assert(op);
     const result = await this.tools.gh(args, options);
     this.assert(op);
@@ -107,23 +115,23 @@ class GitHubProjects {
     return result.response === 0;
   }
 
-  async ensureTools(op) {
+  async ensureTools(op, requireGh = true) {
     const dependencies = await this.tools.detect();
     this.assert(op);
-    this.update({ dependencies, checked: true });
-    if (!dependencies.git || !dependencies.gh) throw new Error('Git و GitHub CLI باید روی همین سیستم نصب باشند. از پیوندهای رسمی پنل نصب کنید؛ سپس «بررسی اتصال» را بزنید.');
+    this.update({ dependencies, checked: true, toolSources: { ...this.tools.sources } });
+    if (!dependencies.git || (requireGh && !dependencies.gh)) throw new Error('ابزارهای همراه برنامه پیدا نشدند. نسخهٔ جدید را دوباره نصب کنید؛ در اجرای سورس، Git و GitHub CLI باید نصب باشند.');
   }
 
   async account(op, optional = false) {
     const result = await this.gh(op, ['api', '--hostname', 'github.com', 'user', '--jq', '{login: .login, id: .id}'], { timeoutMs: 25000, allowFailure: optional });
-    if (result.code !== 0) { this.update({ account: null }); return null; }
+    if (result.code !== 0) { this.update({ account: null, lastIssue: githubIssue(result.stderr || result.stdout) }); return null; }
     const account = JSON.parse(result.stdout);
     repository(`${account.login}/check`);
     if (!Number.isSafeInteger(account.id) || account.id < 1) throw new Error('پاسخ حساب GitHub معتبر نیست.');
     if (this.state.account && (this.state.account.login !== account.login || this.state.account.id !== account.id)) {
       this.revokeWatch(); this.plan = null; this.update({ repositories: [], preview: null });
     }
-    this.update({ account: { login: account.login, id: account.id } });
+    this.update({ account: { login: account.login, id: account.id }, lastIssue: null });
     return this.state.account;
   }
 
@@ -133,7 +141,7 @@ class GitHubProjects {
       const account = await this.account(op, true);
       this.update({ status: account ? 'ready' : 'disconnected', message: account
         ? `حساب ${account.login} متصل است. توکن فقط در ابزار رسمی gh استفاده می‌شود و به چت فرستاده نمی‌شود.`
-        : 'ورود GitHub تأیید نشد. «ورود در مرورگر» را بزنید؛ اتصال اینترنت را نیز بررسی کنید.' });
+        : this.state.lastIssue?.hint || 'ورود GitHub تأیید نشد. «ورود در مرورگر» را بزنید؛ اتصال اینترنت را نیز بررسی کنید.' });
     });
   }
 
@@ -212,7 +220,7 @@ class GitHubProjects {
 
   chooseProject() {
     return this.operationFor('project', async (op) => {
-      await this.ensureTools(op);
+      await this.ensureTools(op, false);
       const folder = await this.pick(op, 'انتخاب ریشهٔ پروژهٔ آماده یا مخزن محلی');
       if (!folder) return;
       this.setProject(op, await this.inspect(op, folder));
@@ -223,14 +231,16 @@ class GitHubProjects {
   clone(payload) {
     return this.operationFor('clone', async (op) => {
       const repo = repository(payload?.repository);
-      await this.ensureTools(op); await this.account(op);
+      await this.ensureTools(op, false);
       const parent = this.state.parent;
       if (!parent || !samePath(fs.realpathSync.native(parent), parent)) throw new Error('ابتدا پوشهٔ والد دانلود را انتخاب کنید.');
       let branch = payload?.branch || '';
       if (branch) branch = branchName(branch);
       else {
-        const info = JSON.parse((await this.gh(op, ['repo', 'view', repo.fullName, '--json', 'defaultBranchRef'])).stdout);
-        branch = branchName(info.defaultBranchRef?.name);
+        const refs = await this.git(op, ['ls-remote', '--symref', '--', repo.cloneUrl, 'HEAD'], parent);
+        const match = refs.stdout.match(/^ref: refs\/heads\/(.+)\tHEAD\r?$/m);
+        if (!match) throw new Error('مخزن خالی است یا شاخهٔ پیش‌فرض دریافت نشد؛ ابتدا یک commit در مخزن بسازید یا نام شاخه را مشخص کنید.');
+        branch = branchName(match[1]);
       }
       const target = path.join(parent, folderName(repo.fullName.split('/')[1]));
       if (fs.existsSync(target) || (() => { try { fs.lstatSync(target); return true; } catch { return false; } })()) throw new Error('پوشهٔ مقصد از قبل وجود دارد؛ والد دیگری انتخاب یا همان پروژه را با «پروژهٔ محلی» باز کنید.');
@@ -254,8 +264,12 @@ class GitHubProjects {
   listBranches() {
     return this.operationFor('branches', async (op) => {
       const project = await this.boundProject(op);
-      const response = await this.gh(op, ['api', '--hostname', 'github.com', `repos/${project.repo.fullName}/branches?per_page=100`, '--jq', '.[].name']);
-      const branches = response.stdout.split(/\r?\n/).filter(Boolean).slice(0, 100).map(branchName);
+      const response = await this.git(op, ['ls-remote', '--heads', '--', project.repo.cloneUrl], project.folder);
+      const branches = response.stdout.split(/\r?\n/).filter(Boolean).slice(0, 100).map((line) => {
+        const match = line.match(/^[a-f0-9]{40,64}\trefs\/heads\/(.+)$/);
+        if (!match) throw new Error('پاسخ شاخه‌های مخزن معتبر نیست.');
+        return branchName(match[1]);
+      });
       this.update({ branches, status: 'ready', message: 'تا ۱۰۰ شاخه فهرست شد؛ شاخهٔ کاری Agent را انتخاب کنید. شاخهٔ دیگری را نیز می‌توانید با نام دقیق وارد کنید.' });
     });
   }

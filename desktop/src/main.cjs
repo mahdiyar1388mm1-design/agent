@@ -3,13 +3,14 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const {
-  app, BrowserWindow, WebContentsView, Menu, dialog, ipcMain, session, shell, screen,
+  app, BrowserWindow, WebContentsView, Menu, dialog, ipcMain, session, shell, screen, clipboard,
 } = require('electron');
 const {
   APP_URL, isAppUrl, isEmbeddedUrl, isSafeExternalUrl, isAllowedPopup,
   navigationKind, originLabel, isAllowedAction, isTrustedSender, canGrantPermission, isAllowedTerminalAction, isTrustedTerminalSender, isAllowedGitHubAction,
 } = require('./policy.cjs');
 const { readWindowState, saveWindowState } = require('./window-state.cjs');
+const { diagnosticReport, diagnosticSummary } = require('./diagnostics.cjs');
 const { TerminalAgent } = require('./terminal-agent.cjs');
 const { GitHubProjects } = require('./github-projects.cjs');
 
@@ -240,6 +241,7 @@ function createMenu(profile) {
       submenu: [
         { label: 'صفحهٔ اصلی Arena', accelerator: 'Alt+Home', click: () => void loadHome() },
         { label: 'بازکردن در مرورگر', click: () => void openInBrowser() },
+        { label: 'عیب‌یابی اتصال', click: () => void showDiagnostics() },
         { label: 'پروژه‌های GitHub', accelerator: 'CmdOrCtrl+Shift+G', click: () => perform('github') },
         { label: 'ترمینال AI (آزمایشی)', accelerator: 'CmdOrCtrl+Shift+T', click: () => perform('terminal') },
         { type: 'separator' },
@@ -282,13 +284,30 @@ function createMenu(profile) {
           if (mainWindow) void dialog.showMessageBox(mainWindow, {
             type: 'info', title: 'دربارهٔ Arena Desktop',
             message: `Arena Desktop ${app.getVersion()}`,
-            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود. پل آزمایشی PowerShell مجوز یک‌بارهٔ جلسه برای اجرای خودکار و مجوز مستقل ارسال خروجی دارد؛ پیش‌فرض هر دو خاموش است. موارد علامت‌خورده نیازمند بررسی دستی‌اند؛ تشخیص خطر ناقص و پوشهٔ پروژه sandbox نیست. این پل ابزار رسمی Agent نیست و امکانات سمت سرور حساب را باز نمی‌کند. پنل GitHub برای دانلود/انتشار/دریافت خودکار به نصب جداگانهٔ Git و GitHub CLI نیاز دارد؛ اتصال مخزن خصوصی در خود Arena مستقل است.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
+            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود. پل آزمایشی PowerShell مجوز یک‌بارهٔ جلسه برای اجرای خودکار و مجوز مستقل ارسال خروجی دارد؛ پیش‌فرض هر دو خاموش است. موارد علامت‌خورده نیازمند بررسی دستی‌اند؛ تشخیص خطر ناقص و پوشهٔ پروژه sandbox نیست. این پل ابزار رسمی Agent نیست و امکانات سمت سرور حساب را باز نمی‌کند. Git و GitHub CLI در نسخهٔ Windows همراه برنامه‌اند؛ حساب شما فقط با ورود خودتان متصل می‌شود؛ اتصال مخزن خصوصی در خود Arena مستقل است.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
             icon: ICON,
           });
         } },
       ],
     },
   ]);
+}
+
+let diagnosticPending = false;
+async function showDiagnostics() {
+  if (diagnosticPending || !mainWindow) return;
+  diagnosticPending = true;
+  try {
+    const report = diagnosticReport({ version: app.getVersion(), platform: process.platform, arch: process.arch, electron: process.versions?.electron,
+      siteUrl: siteContents()?.getURL(), siteReady: state.ready, siteLoading: state.loading, siteError: state.error?.code,
+      adapter: await terminalAgent?.diagnostics(), terminal: terminalAgent?.snapshot(), github: githubProjects?.snapshot() });
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const result = await dialog.showMessageBox(mainWindow, { type: 'info', title: 'عیب‌یابی Arena Desktop',
+      message: 'بررسی خواندنی اتصال؛ هیچ فرمانی اجرا یا پیامی به مدل ارسال نشد.',
+      detail: diagnosticSummary(report) + '\n\nگزارش فقط وضعیت فنی است؛ نام مخزن/حساب، مسیر، متن چت، فرمان و اعتبارنامه در آن نیست. با دکمهٔ کپی می‌توانید خودتان آن را برای رفع مشکل بفرستید. هیچ گزارش خودکاری ارسال نمی‌شود.',
+      buttons: ['کپی گزارش فنی', 'بستن'], defaultId: 1, cancelId: 1, noLink: true });
+    if (result.response === 0) clipboard.writeText(JSON.stringify(report, null, 2));
+  } finally { diagnosticPending = false; }
 }
 
 function perform(action) {
@@ -306,6 +325,7 @@ function perform(action) {
       publish({ error: null, loading: true });
       return state.ready ? contents.reload() : loadHome();
     case 'open-browser': return openInBrowser();
+    case 'diagnostics': return showDiagnostics();
     case 'menu': applicationMenu?.popup({ window: mainWindow }); break;
     case 'terminal':
       terminalOpen = !terminalOpen;
@@ -387,6 +407,7 @@ function createWindow(profile) {
   });
   githubProjects = new GitHubProjects({
     getWindow: () => mainWindow, getSiteUrl: () => siteContents()?.getURL() || '', dialog,
+    resolveProxy: typeof profile.resolveProxy === 'function' ? (url) => profile.resolveProxy(url) : undefined,
     isTerminalActive: () => Boolean(terminalAgent?.session || terminalAgent?.busy),
     onProject: (project) => terminalAgent?.attachProject(project),
     onHandoff: (message, guard) => terminalAgent.sendProjectMessage(message, guard),
@@ -486,12 +507,16 @@ function createWindow(profile) {
   win.webContents.once('did-finish-load', () => {
     publish();
     if (app.commandLine?.hasSwitch('arena-self-test')) {
-      // Read-only packaged-app diagnostic: exercise the real sandboxed preload
-      // and exact-file IPC checks. Never enable a session or run a command here.
+      // Explicit CI diagnostic: real sandboxed preload/exact-file IPC, packaged
+      // tools and offline editors. Never grant a session or run model commands.
       const check = 'Promise.all([window.arenaDesktop.getTerminalState(), window.arenaDesktop.getGitHubState()]).then(([s, g]) => g.checked === false && g.repositories.length === 0 && g.branches.length === 0 && g.preview === null && g.watching === false && g.account === null && g.project === null && g.busy === false && typeof window.arenaDesktop.github === "function" && s.status === "off" && s.session === null && s.pending === null && s.autoExecute === false && s.autoShare === false && s.expiresAt === null && s.supported === true && typeof window.arenaDesktop.terminal === "function")';
-      void win.webContents.executeJavaScript(check).then((healthy) => {
-        console.log(healthy ? 'ARENA_DESKTOP_BRIDGE_SELF_TEST_OK' : 'ARENA_DESKTOP_BRIDGE_SELF_TEST_FAILED');
-        app.exit(healthy ? 0 : 1);
+      void win.webContents.executeJavaScript(check).then(async (healthy) => {
+        if (!healthy) throw new Error('Packaged bridge defaults were not safe');
+        const checks = require('./compat-check.cjs');
+        await checks.checkTools(process.resourcesPath);
+        await checks.checkComposer(view.webContents);
+        console.log('ARENA_DESKTOP_BRIDGE_SELF_TEST_OK');
+        app.exit(0);
       }).catch((error) => {
         console.error('ARENA_DESKTOP_BRIDGE_SELF_TEST_FAILED', error.message);
         app.exit(1);
@@ -551,14 +576,16 @@ if (!app.requestSingleInstanceLock()) {
     return githubProjects?.handle(action, payload);
   });
   ipcMain.handle('arena:action', (event, action) => {
-    if (!isTrustedSender(event, mainWindow?.webContents) || !isAllowedAction(action)) {
+    if (!isTrustedSender(event, mainWindow?.webContents) || !isAllowedAction(action)
+      || (action === 'diagnostics' && !isTrustedTerminalSender(event, mainWindow?.webContents, SHELL_URL))) {
       throw new Error('Untrusted action');
     }
     return perform(action);
   });
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     app.setAppUserModelId(APP_ID);
     const profile = session.fromPartition(PARTITION);
+    if (app.commandLine?.hasSwitch('arena-self-test')) await require('./compat-check.cjs').installFixture(profile);
     configureSession(profile);
     applicationMenu = createMenu(profile);
     Menu.setApplicationMenu(applicationMenu);

@@ -98,3 +98,12 @@ h1 bdi { color: var(--accent); font-weight: 650; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Keep all controls reachable on scaled laptop displays. */
+@media (max-width: 1080px) {
+  .toolbar { gap: 7px; padding-inline: 12px; }
+  .brand-text { display: none; }
+  .address { min-width: 115px; }
+  .terminal-button > span, .browser-button > span { display: none; }
+  .terminal-button, .browser-button { padding-inline: 9px; }
+}

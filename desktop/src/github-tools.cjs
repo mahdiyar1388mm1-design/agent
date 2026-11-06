@@ -5,10 +5,11 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { StringDecoder } = require('node:string_decoder');
+const { bundledToolPaths, prependToolPath } = require('./tool-paths.cjs');
 const { redactOutput } = require('./terminal-protocol.cjs');
 
 const shellQuote = (value) => `'${value.replace(/'/g, "'\\''")}'`;
-const safeError = (value) => redactOutput(String(value)).slice(0, 1800);
+const safeError = (value) => redactOutput(String(value).replace(/(https?:\/\/)[^\s/@]+@/gi, '$1[redacted]@')).slice(0, 1800);
 
 function toolEnvironment(environment) {
   const result = { ...environment };
@@ -17,7 +18,7 @@ function toolEnvironment(environment) {
   }
   return { ...result, GH_HOST: 'github.com', GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1',
     GH_NO_EXTENSION_UPDATE_NOTIFIER: '1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never',
-    GIT_LITERAL_PATHSPECS: '1', GIT_LFS_SKIP_SMUDGE: '1', GIT_CONFIG_NOSYSTEM: '1', NO_COLOR: '1', GH_PAGER: '' };
+    DO_NOT_TRACK: '1', GH_TELEMETRY_DISABLED: '1', GIT_LITERAL_PATHSPECS: '1', GIT_LFS_SKIP_SMUDGE: '1', GIT_CONFIG_NOSYSTEM: '1', NO_COLOR: '1', GH_PAGER: '' };
 }
 
 class GitHubTools {
@@ -26,6 +27,10 @@ class GitHubTools {
     this.env = options.env || process.env;
     this.spawn = options.spawn || spawn;
     this.paths = options.paths || {};
+    this.resourcesPath = options.resourcesPath || process.resourcesPath || null;
+    this.resolveProxy = options.resolveProxy;
+    this.proxyMode = 'default';
+    this.sources = {};
     this.cwd = options.cwd || os.homedir();
     this.hooks = null;
     this.job = null;
@@ -43,6 +48,8 @@ class GitHubTools {
   }
 
   async locate(name) {
+    const bundled = bundledToolPaths(this.resourcesPath, this.platform)[name];
+    if (bundled) { this.sources[name] = 'bundled'; return bundled; }
     const candidates = this.platform === 'win32' ? [
       ...(name === 'git' ? [
         path.win32.join(this.env.ProgramFiles || 'C:\\Program Files', 'Git', 'cmd', 'git.exe'),
@@ -52,6 +59,9 @@ class GitHubTools {
         path.win32.join(this.env.LOCALAPPDATA || '', 'Programs', 'GitHub CLI', 'gh.exe'),
       ]),
     ] : [`/usr/bin/${name}`, `/usr/local/bin/${name}`, `/opt/homebrew/bin/${name}`];
+    for (const candidate of candidates) {
+      try { if (fs.statSync(candidate).isFile()) { this.sources[name] = 'installed'; return fs.realpathSync.native(candidate); } } catch {}
+    }
     if (this.platform === 'win32') {
       const where = path.win32.join(this.env.SystemRoot || 'C:\\Windows', 'System32', 'where.exe');
       try {
@@ -61,10 +71,27 @@ class GitHubTools {
     }
     for (const candidate of candidates) {
       try {
-        if (fs.statSync(candidate).isFile()) return fs.realpathSync.native(candidate);
+        if (fs.statSync(candidate).isFile()) { this.sources[name] = 'installed'; return fs.realpathSync.native(candidate); }
       } catch { /* Try the next installed location. */ }
     }
     return null;
+  }
+
+  async configureProxy(url) {
+    this.proxyMode = 'default';
+    const entries = Object.entries(this.env);
+    const explicit = (name) => entries.find(([key, value]) => key === name.toLowerCase() && value)?.[1]
+      || entries.find(([key, value]) => key.toUpperCase() === name && value)?.[1];
+    const https = explicit('HTTPS_PROXY'); const http = explicit('HTTP_PROXY'); const all = explicit('ALL_PROXY');
+    if (https || http || all) { this.proxyMode = 'environment'; return { HTTPS_PROXY: https || all || http, HTTP_PROXY: http || all || https }; }
+    if (!this.resolveProxy) return {};
+    const result = await this.resolveProxy(url);
+    const first = String(result).split(';')[0].trim();
+    const match = first.match(/^(PROXY|HTTPS|SOCKS5?|SOCKS) ([a-z0-9.[\]:-]+)$/i);
+    if (!match) return {};
+    const scheme = /^SOCKS/i.test(match[1]) ? 'socks5' : match[1].toUpperCase() === 'HTTPS' ? 'https' : 'http';
+    this.proxyMode = 'system';
+    return { HTTPS_PROXY: `${scheme}://${match[2]}`, HTTP_PROXY: `${scheme}://${match[2]}` };
   }
 
   git(args, cwd, options = {}) {
@@ -75,10 +102,11 @@ class GitHubTools {
     const helper = gh ? `!${shellQuote(this.platform === 'win32' ? gh.replace(/\\/g, '/') : gh)} auth git-credential` : '';
     const flags = ['-c', `core.hooksPath=${this.hooks}`, '-c', 'core.fsmonitor=false', '-c', `init.templateDir=${this.hooks}`,
       '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', '-c', 'core.askPass=', '-c', 'push.recurseSubmodules=no', '-c', 'push.followTags=false',
-      '-c', 'protocol.file.allow=never', '-c', 'protocol.ext.allow=never',
+      '-c', 'http.sslVerify=true', '-c', 'protocol.file.allow=never', '-c', 'protocol.ext.allow=never',
       '-c', 'submodule.recurse=false', '-c', 'filter.lfs.required=false', '-c', 'filter.lfs.process=',
       '-c', 'filter.lfs.smudge=', '-c', 'filter.lfs.clean=', '-c', 'credential.interactive=never',
       '-c', 'credential.helper=', '-c', 'credential.https://github.com.helper='];
+    if (this.platform === 'win32') flags.push('-c', 'http.sslBackend=schannel');
     if (helper) flags.push('-c', `credential.https://github.com.helper=${helper}`);
     return this.raw(this.paths.git, [...flags, ...args], { ...options, cwd });
   }
@@ -122,10 +150,12 @@ class GitHubTools {
       }
       if (bytes.length > available) void this.stop('خروجی ابزار بیش از سقف مجاز بود؛ عملیات متوقف شد.');
     };
+    const environment = toolEnvironment({ ...this.env, ...options.networkEnv });
+    prependToolPath(environment, [this.paths.git, this.paths.gh].filter(Boolean), this.platform);
     job.forceFinish = () => { job.stopWarning = 'توقف ابزار تأیید نشد؛ Task Manager را بررسی کنید. تا خروج واقعی ابزار، عملیات جدید مسدود است.'; finish(null, job.stopWarning, false); };
     try {
       job.child = this.spawn(executable, args, { cwd: options.cwd || this.cwd,
-        env: toolEnvironment(this.env), shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+        env: environment, shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
       job.child.stdout?.on('data', (data) => receive('stdout', data));
       job.child.stderr?.on('data', (data) => receive('stderr', data));
       job.child.once('error', (error) => {

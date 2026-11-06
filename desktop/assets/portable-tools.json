@@ -1,0 +1,18 @@
+{
+  "git": {
+    "version": "2.56.0.windows.4",
+    "url": "https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/MinGit-2.56.0.4-64-bit.zip",
+    "bytes": 39846926,
+    "sha256": "e3bf78351fe777fba47ddee5950082f8a98bb0f02604fdc7ba3ee2cb68ffa877",
+    "executable": "cmd/git.exe",
+    "source": "https://github.com/git-for-windows/git/tree/v2.56.0.windows.4"
+  },
+  "gh": {
+    "version": "2.103.3",
+    "url": "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_windows_amd64.zip",
+    "bytes": 15197187,
+    "sha256": "98d0cfa794721665d7973dd728c78aff7bd836d58f10f6d7a03568eccb0a22e0",
+    "executable": "bin/gh.exe",
+    "source": "https://github.com/cli/cli/tree/v2.103.3"
+  }
+}

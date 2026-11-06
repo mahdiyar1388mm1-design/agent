@@ -5,3 +5,6 @@ dist
 
 # Generated Windows downloads (source is in desktop/)
 artifacts/
+
+# Verified portable tools are prepared during packaging, never committed.
+desktop/build/

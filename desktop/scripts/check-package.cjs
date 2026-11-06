@@ -54,10 +54,29 @@ async function verify() {
   assert.equal(packed.main, 'src/main.cjs');
   for (const relative of [
     ...filesBelow(path.join(root, 'src'), 'src'),
-    'assets/icon.svg', 'assets/icon.png', 'assets/icon.ico', 'README.md', 'TERMINAL.md', 'GITHUB.md',
+    'assets/icon.svg', 'assets/icon.png', 'assets/icon.ico', 'README.md', 'TERMINAL.md', 'GITHUB.md', 'THIRD-PARTY.md', 'assets/portable-tools.json',
   ]) {
     assert.deepEqual(packedFile(archive, relative), fs.readFileSync(path.join(root, relative)), `Stale or missing packed file: ${relative}`);
   }
+  const toolRoot = path.join(output, 'win-unpacked', 'resources', 'tools');
+  const toolManifest = JSON.parse(fs.readFileSync(path.join(toolRoot, 'manifest.json'), 'utf8'));
+  const pins = require('../assets/portable-tools.json');
+  const expectedToolFiles = ['manifest.json', 'THIRD-PARTY.md'];
+  for (const name of ['git', 'gh']) {
+    const tool = toolManifest.tools[name];
+    assert.equal(tool.archiveSha256, pins[name].sha256);
+    assert.equal(tool.version, pins[name].version);
+    assert.equal(tool.executable, `${name}/${pins[name].executable}`);
+    expectedToolFiles.push(...Object.keys(tool.files).map((file) => `${name}/${file}`));
+    assert.ok(fs.existsSync(path.join(toolRoot, tool.executable)), `Missing bundled ${name}`);
+    for (const [file, hash] of Object.entries(tool.files)) {
+      assert.equal(await sha256(path.join(toolRoot, name, file)), hash, `Stale bundled ${name} resource: ${file}`);
+    }
+    assert.ok(Object.keys(tool.files).some((file) => /license|copying/i.test(file)), `Missing ${name} license notices`);
+  }
+  assert.deepEqual(filesBelow(toolRoot).sort(), expectedToolFiles.sort(), 'Unexpected/missing tool resources');
+  console.log('Verified complete bundled Git/gh resources, pinned archive hashes and license notices.');
+  await require('./check-tools-network.cjs').checkPublicGit(path.dirname(toolRoot));
   const integrityResource = resources.entries.find((entry) => entry.type === 'INTEGRITY' && entry.id === 'ELECTRONASAR');
   assert.ok(integrityResource, 'Missing embedded ASAR integrity resource');
   const integrity = JSON.parse(Buffer.from(integrityResource.bin).toString('utf8'));
@@ -87,7 +106,7 @@ async function verify() {
     const checksum = await sha256(filename);
     fs.writeFileSync(path.join(output, 'SHA256SUMS.txt'), `${checksum}  ${name}\n`);
     fs.copyFileSync(path.join(root, 'README.md'), path.join(output, 'README.fa.md'));
-    for (const guide of ['TERMINAL.md', 'GITHUB.md']) fs.copyFileSync(path.join(root, guide), path.join(output, guide));
+    for (const guide of ['TERMINAL.md', 'GITHUB.md', 'THIRD-PARTY.md']) fs.copyFileSync(path.join(root, guide), path.join(output, guide));
     console.log(`SHA256 ${checksum}  ${name}`);
     if (process.env.GITHUB_ACTIONS === 'true') {
       console.log(`::notice title=Installer SHA-256::${checksum}  ${name}`);
