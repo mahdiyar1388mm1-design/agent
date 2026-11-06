@@ -72,3 +72,13 @@ test('expired queued DOM writes do nothing, and unknown adapter actions cannot r
   ui.dom.window.Date.now = old;
   assert.throws(() => adapterScript('eval', 'process.exit()'), /Unsupported/);
 });
+
+test('offline page snapshots and writes cannot continue a local automation loop', (t) => {
+  const ui = fixture(t, '<pre>stale request</pre>');
+  Object.defineProperty(ui.dom.window.navigator, 'onLine', { value: false });
+  assert.equal(ui.call('snapshot').diagnostic, 'offline');
+  assert.equal(ui.call('snapshot').blocks.length, 0);
+  assert.equal(ui.call('prepare', 'Do not insert').reason, 'offline');
+  assert.equal(ui.textarea.value, '');
+  assert.equal(ui.sent(), 0);
+});

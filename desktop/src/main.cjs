@@ -277,7 +277,7 @@ function createMenu(profile) {
           if (mainWindow) void dialog.showMessageBox(mainWindow, {
             type: 'info', title: 'دربارهٔ Arena Desktop',
             message: `Arena Desktop ${app.getVersion()}`,
-            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود. پل آزمایشی PowerShell فقط با فعال‌سازی و تأیید جداگانهٔ هر فرمان کار می‌کند؛ پوشهٔ پروژه sandbox نیست.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
+            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود. پل آزمایشی PowerShell مجوز یک‌بارهٔ جلسه برای اجرای خودکار و مجوز مستقل ارسال خروجی دارد؛ پیش‌فرض هر دو خاموش است. موارد علامت‌خورده نیازمند بررسی دستی‌اند؛ تشخیص خطر ناقص و پوشهٔ پروژه sandbox نیست. این پل ابزار رسمی Agent نیست و امکانات سمت سرور حساب را باز نمی‌کند.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
             icon: ICON,
           });
         } },
@@ -360,7 +360,8 @@ function createWindow(profile) {
     dialog,
     onUpdate: (snapshot) => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
-      if (snapshot.status === 'review' && !terminalOpen) {
+      if (!terminalOpen && ((snapshot.status === 'review' && (!snapshot.autoExecute || snapshot.reviewReasons.length))
+        || (snapshot.status === 'result' && (!snapshot.autoShare || snapshot.reviewReasons.length)))) {
         terminalOpen = true;
         layoutSite?.();
         publish({ terminalOpen });
@@ -374,6 +375,9 @@ function createWindow(profile) {
   guardNavigation(view.webContents);
 
   view.webContents.on('did-start-loading', () => publish({ loading: true, error: null }));
+  view.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) terminalAgent?.onDocumentChange();
+  });
   // Show challenge/login pages as soon as their DOM is ready. Do not conceal them
   // behind a spinner while waiting for every third-party resource to finish.
   view.webContents.on('dom-ready', () => {
@@ -390,7 +394,10 @@ function createWindow(profile) {
   view.webContents.on('did-navigate', navigated);
   view.webContents.on('did-navigate-in-page', navigated);
   view.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3) fail(code, description);
+    if (isMainFrame && code !== -3) {
+      terminalAgent?.onDocumentChange('ارتباط صفحه قطع شد؛ اتصال ترمینال و مجوزهای خودکار باطل شدند.');
+      fail(code, description);
+    }
   });
   view.webContents.on('render-process-gone', () => {
     terminalAgent?.pause('صفحه بسته شد؛ اتصال ترمینال متوقف شد.');
@@ -448,7 +455,7 @@ function createWindow(profile) {
     if (app.commandLine?.hasSwitch('arena-self-test')) {
       // Read-only packaged-app diagnostic: exercise the real sandboxed preload
       // and exact-file IPC checks. Never enable a session or run a command here.
-      const check = 'window.arenaDesktop.getTerminalState().then(s => s.status === "off" && s.session === null && s.pending === null && s.supported === true && typeof window.arenaDesktop.terminal === "function")';
+      const check = 'window.arenaDesktop.getTerminalState().then(s => s.status === "off" && s.session === null && s.pending === null && s.autoExecute === false && s.autoShare === false && s.expiresAt === null && s.supported === true && typeof window.arenaDesktop.terminal === "function")';
       void win.webContents.executeJavaScript(check).then((healthy) => {
         console.log(healthy ? 'ARENA_DESKTOP_BRIDGE_SELF_TEST_OK' : 'ARENA_DESKTOP_BRIDGE_SELF_TEST_FAILED');
         app.exit(healthy ? 0 : 1);

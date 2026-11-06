@@ -19,6 +19,7 @@
   function render(snapshot) {
     if (!snapshot || snapshot.revision < revision) return;
     revision = snapshot.revision;
+    const previousSession = state?.session;
     state = snapshot;
     byId('terminal-status').textContent = labels[state.status] || state.status;
     byId('terminal-message').textContent = state.message;
@@ -26,9 +27,26 @@
     byId('terminal-folder').textContent = state.folder || 'هنوز پوشه‌ای انتخاب نشده است';
     byId('terminal-support').hidden = state.supported;
     byId('terminal-step').textContent = state.session ? `مرحلهٔ ${state.seq} از ۲۰` : 'جلسه‌ای فعال نیست';
-    byId('terminal-choose').disabled = inFlight || Boolean(state.session) || ['running', 'stopping', 'confirming', 'starting'].includes(state.status);
-    byId('terminal-start').disabled = inFlight || !state.supported || !state.folder || Boolean(state.session) || ['running', 'stopping'].includes(state.status);
-    byId('terminal-disable').disabled = !state.session && !['running', 'stopping', 'starting'].includes(state.status);
+    const locked = inFlight || Boolean(state.session) || Boolean(state.busy) || ['running', 'stopping', 'confirming', 'starting'].includes(state.status);
+    byId('terminal-choose').disabled = locked;
+    byId('terminal-task').disabled = locked;
+    for (const id of ['terminal-auto-execute', 'terminal-auto-share']) byId(id).disabled = locked;
+    if (state.session && state.status !== 'starting') {
+      byId('terminal-auto-execute').checked = state.autoExecute === true;
+      byId('terminal-auto-share').checked = state.autoShare === true;
+    } else if (previousSession && !state.session) {
+      byId('terminal-auto-execute').checked = false;
+      byId('terminal-auto-share').checked = false;
+    }
+    byId('terminal-mode').textContent = state.session
+      ? state.status === 'starting' ? 'در انتظار تأیید مجوزهای همین جلسه…'
+        : `اجرای خودکار: ${state.autoExecute ? 'روشن' : 'خاموش'} | ارسال خودکار: ${state.autoShare ? 'روشن' : 'خاموش'}${state.expiresAt ? ` | تا ${new Date(state.expiresAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}` : ''}`
+      : 'مجوز خودکاری فعال نیست.';
+    const reasons = Array.isArray(state.reviewReasons) ? state.reviewReasons : [];
+    byId('terminal-review-reasons').hidden = reasons.length === 0;
+    byId('terminal-review-reasons').textContent = reasons.length ? `نیاز به بررسی دستی: ${reasons.join('؛ ')}` : '';
+    byId('terminal-start').disabled = locked || !state.supported || !state.folder;
+    byId('terminal-disable').disabled = !state.session && !state.busy && !['running', 'stopping', 'starting'].includes(state.status);
     byId('terminal-pending').hidden = !state.pending;
     byId('terminal-reason').textContent = state.pending?.reason || 'بدون توضیح؛ متن کامل فرمان را بررسی کنید.';
     byId('terminal-command').textContent = state.pending?.command || '';
@@ -50,7 +68,8 @@
   async function perform(action) {
     if (inFlight && action !== 'disable') return;
     byId('terminal-error').hidden = true;
-    const payload = action === 'start' ? { task: byId('terminal-task').value }
+    const payload = action === 'start' ? { task: byId('terminal-task').value,
+      autoExecute: byId('terminal-auto-execute').checked, autoShare: byId('terminal-auto-share').checked }
       : ['approve', 'reject', 'share'].includes(action) ? {
         session: state?.session, seq: state?.seq,
         ...(action === 'share' ? { text: byId('terminal-share-text').value } : {}),

@@ -1,7 +1,7 @@
 {
   "name": "arena-desktop-unofficial",
   "productName": "Arena Desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "An unofficial, security-conscious Windows desktop wrapper for arena.ai.",
   "author": "mahdiyar1388mm1-design",
   "private": true,

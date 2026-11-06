@@ -6,7 +6,8 @@ const { randomUUID } = require('node:crypto');
 const { isTerminalSiteUrl } = require('./policy.cjs');
 const { PowerShellRunner } = require('./powershell-runner.cjs');
 const { adapterScript } = require('./site-adapter.cjs');
-const { MAX_STEPS, readRequest, initialMessage, previewOutput, resultMessage } = require('./terminal-protocol.cjs');
+const { MAX_STEPS, readRequest, initialMessage, previewOutput, resultMessage, outputReviewReasons } = require('./terminal-protocol.cjs');
+const { SESSION_LIFETIME_MS, requestedPermissions, commandReviewReasons, permissionSummary } = require('./session-permissions.cjs');
 
 const ISOLATED_WORLD = 1101;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -20,23 +21,29 @@ class TerminalAgent {
     this.runner = options.runner || new PowerShellRunner();
     this.siteOverride = options.site;
     this.sleep = options.sleep || delay;
+    this.now = options.now || Date.now;
     this.autoPoll = options.autoPoll !== false;
     this.folder = '';
     this.session = null;
     this.epoch = 0;
     this.revision = 0;
     this.timer = null;
+    this.expiryTimer = null;
     this.polling = false;
     this.stable = '';
-    this.state = { status: 'off', message: 'اتصال ترمینال غیرفعال است.', pending: null, result: null, shareText: '' };
+    this.state = { status: 'off', message: 'اتصال ترمینال غیرفعال است.', pending: null, result: null, shareText: '', reviewReasons: [] };
   }
 
   get busy() { return this.runner.running || ['starting', 'confirming'].includes(this.state.status); }
 
   snapshot() {
-    return { ...this.state, pending: this.state.pending ? { ...this.state.pending } : null,
+    return { ...this.state, reviewReasons: [...this.state.reviewReasons],
+      pending: this.state.pending ? { ...this.state.pending } : null,
       result: this.state.result ? { ...this.state.result } : null,
-      folder: this.folder, session: this.session?.id || null,
+      folder: this.folder, session: this.session?.id || null, busy: this.busy,
+      autoExecute: this.session?.permissions?.autoExecute === true,
+      autoShare: this.session?.permissions?.autoShare === true,
+      expiresAt: this.session?.expiresAt || null,
       seq: this.session?.seq || 0, revision: this.revision, supported: this.runner.supported };
   }
 
@@ -51,10 +58,19 @@ class TerminalAgent {
     return contents && !contents.isDestroyed() ? contents.getURL() : '';
   }
 
+  ensureUnexpired() {
+    if (this.session?.expiresAt && this.now() >= this.session.expiresAt) {
+      const message = 'مجوز ۳۰ دقیقه‌ای این جلسه پایان یافت؛ برای ادامه جلسهٔ تازه شروع کنید.';
+      this.pause(message);
+      throw new Error(message);
+    }
+  }
+
   async site(action, text) {
+    this.ensureUnexpired();
     const contents = this.getContents();
     if (!contents || contents.isDestroyed() || !isTerminalSiteUrl(contents.getURL())) {
-      throw new Error('ابتدا یک گفتگوی تک‌مدلی در خود سایت Arena باز کنید.');
+      throw new Error('ابتدا یک گفتگوی دارای کادر پیام یکتا در خود سایت Arena باز کنید.');
     }
     if (this.session?.pinnedUrl && contents.getURL() !== this.session.pinnedUrl) {
       throw new Error('گفتگو تغییر کرده است؛ اتصال را قطع و دوباره شروع کنید.');
@@ -78,7 +94,7 @@ class TerminalAgent {
     const folder = fs.realpathSync(result.filePaths[0]);
     if (!fs.statSync(folder).isDirectory()) throw new Error('پوشهٔ انتخاب‌شده معتبر نیست.');
     this.folder = folder;
-    this.update({ status: 'ready', message: 'پوشه انتخاب شد. یک مدل در حالت چت تک‌مدلی Arena انتخاب کنید.' });
+    this.update({ status: 'ready', message: 'پوشه انتخاب شد. یک گفتگو با کادر پیام یکتا در Arena باز کنید.' });
     return this.snapshot();
   }
 
@@ -86,28 +102,45 @@ class TerminalAgent {
     if (!this.runner.supported) throw new Error('این قابلیت برای PowerShell روی Windows ساخته شده است.');
     if (this.session || this.busy) throw new Error('ابتدا جلسهٔ قبلی را قطع کنید.');
     if (!this.folder) throw new Error('ابتدا پوشهٔ پروژه را انتخاب کنید.');
+    // These are local UI requests, not grants. Only the native consent below can
+    // authorize them. Model JSON and subsequent action payloads cannot set grants.
+    const permissions = requestedPermissions(payload);
     const id = randomUUID();
-    const message = initialMessage(id, path.basename(this.folder), payload?.task);
+    const message = initialMessage(id, path.basename(this.folder), payload?.task, permissions);
     const epoch = ++this.epoch;
-    this.session = { id, seq: 1, pinnedUrl: null, lastActivity: Date.now() };
-    this.update({ status: 'starting', message: 'در انتظار اجازهٔ شروع…', pending: null, result: null, shareText: '' });
+    const startUrl = this.currentUrl();
+    this.session = { id, seq: 1, pinnedUrl: null, startUrl, initialPosting: false,
+      permissions: null, expiresAt: null, lastActivity: this.now() };
+    this.update({ status: 'starting', message: 'در انتظار اجازهٔ شروع…', pending: null, result: null, shareText: '', reviewReasons: [], stopWarning: null });
     try {
       const diagnostic = await this.site('snapshot');
       if (epoch !== this.epoch) return this.snapshot();
       if (diagnostic.diagnostic !== 'ready' || diagnostic.busy) {
-        throw new Error(`کادر چت سازگار پیدا نشد یا مدل مشغول است (${diagnostic.diagnostic}). در حالت تک‌مدلی یک گفتگوی خالی باز کنید.`);
+        throw new Error(`کادر پیام سازگار پیدا نشد یا مدل مشغول است (${diagnostic.diagnostic}). یک گفتگو با یک کادر ارسال خالی باز کنید؛ حالت دو مدل هم‌زمان پشتیبانی نمی‌شود.`);
       }
       const consent = await this.dialog.showMessageBox(this.getWindow(), {
-        type: 'warning', title: 'فعال‌کردن ترمینال محلی برای AI',
-        message: 'این قابلیت آزمایشی می‌تواند فرمان‌های PowerShell را با دسترسی کاربر فعلی اجرا کند.',
-        detail: `پوشهٔ شروع: ${this.folder}\n\nپوشهٔ انتخابی sandbox نیست؛ فرمان تأییدشده می‌تواند بیرون آن را هم تغییر دهد یا به شبکه دسترسی داشته باشد. هر دستور جداگانه تأیید می‌شود. خروجی فقط بعد از بازبینی و اجازهٔ جداگانهٔ شما به Arena ارسال می‌شود. رمز، کلید خصوصی و اطلاعات حساس را در خروجی ارسال نکنید.\n\nاتصال از طریق پیام‌های معمول چت است، نه API رسمی Arena. حساب/مدل خود سایت استفاده می‌شود و سازگاری همیشگی تضمین نمی‌شود.`,
-        buttons: ['می‌پذیرم؛ ارسال درخواست و شروع', 'لغو'], defaultId: 1, cancelId: 1, noLink: true,
+        type: 'warning', title: 'مجوز همین جلسه برای AI و PowerShell محلی',
+        message: 'فرمان‌های مدل/Agent با دسترسی واقعی کاربر Windows اجرا می‌شوند. فقط برای کار و داده‌های مورداعتماد اجازه دهید.',
+        detail: `پوشهٔ شروع: ${this.folder}\n\n${permissionSummary(permissions)}\n\nمتن سایت، Agent و مدل قابل اعتماد نیست و می‌تواند فرمان مخرب تولید کند. ارسال خودکار خروجی، اجازه‌ای مستقل از اجرای خودکار است.\n\nاتصال از طریق پیام‌های چت است، نه API رسمی Arena. قابلیت‌های خود Agent و حساب را تغییر نمی‌دهد و سازگاری همیشگی تضمین نمی‌شود.`,
+        buttons: ['این مجوزهای جلسه را می‌پذیرم؛ شروع', 'لغو'], defaultId: 1, cancelId: 1, noLink: true,
       });
       if (epoch !== this.epoch) return this.snapshot();
       if (consent.response !== 0) return this.disable();
+      if (this.currentUrl() !== startUrl) throw new Error('گفتگو هنگام دریافت مجوز تغییر کرد؛ چیزی ارسال یا اجرا نشد.');
+      this.session.permissions = permissions;
+      this.session.expiresAt = this.now() + SESSION_LIFETIME_MS;
+      this.expiryTimer = setTimeout(() => {
+        if (epoch === this.epoch && this.session) this.pause('مجوز ۳۰ دقیقه‌ای این جلسه پایان یافت؛ برای ادامه جلسهٔ تازه شروع کنید.');
+      }, SESSION_LIFETIME_MS);
+      this.expiryTimer.unref?.();
+      // A new chat may acquire its permanent URL as the initial message sends.
+      // Once this bootstrap completes, even navigation before request #1 revokes.
+      this.session.initialPosting = true;
       await this.post(message, epoch);
       if (epoch !== this.epoch) return this.snapshot();
-      this.update({ status: 'waiting', message: 'درخواست به چت فرستاده شد؛ منتظر دستور ساختاریافتهٔ مدل هستیم.' });
+      this.session.initialPosting = false;
+      this.session.pinnedUrl = this.currentUrl();
+      this.update({ status: 'waiting', message: 'درخواست فرستاده شد؛ منتظر فرمان ساختاریافتهٔ مدل/Agent هستیم.' });
       this.schedule();
     } catch (error) {
       if (epoch === this.epoch) this.pause(error.message);
@@ -116,14 +149,16 @@ class TerminalAgent {
   }
 
   async post(message, epoch) {
+    if (epoch !== this.epoch || !this.session) throw new Error('جلسه قطع شده است.');
     const prepared = await this.site('prepare', message);
     if (!prepared.ok) throw new Error(this.adapterError(prepared.reason));
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await this.sleep(200);
-      if (epoch !== this.epoch) throw new Error('جلسه قطع شده است.');
+      if (epoch !== this.epoch || !this.session) throw new Error('جلسه قطع شده است.');
       const sent = await this.site('send', message);
+      if (epoch !== this.epoch || !this.session) throw new Error('جلسه قطع شده است.');
       if (sent.ok) {
-        this.session.lastActivity = Date.now();
+        this.session.lastActivity = this.now();
         return;
       }
       if (sent.reason !== 'send-disabled') throw new Error(this.adapterError(sent.reason));
@@ -132,8 +167,8 @@ class TerminalAgent {
   }
 
   adapterError(reason) {
-    if (reason === 'draft-present' || reason === 'draft-changed') return 'پیش‌نویس فعلی چت را تغییر نمی‌دهیم. آن را خودتان ارسال/پاک کنید و جلسه را دوباره شروع کنید.';
-    return `ارتباط با کادر چت برقرار نشد (${reason}). ساختار سایت ممکن است تغییر کرده باشد؛ چیزی اجرا نشد.`;
+    if (reason === 'draft-present' || reason === 'draft-changed') return 'پیش‌نویس فعلی گفتگو را تغییر نمی‌دهیم. آن را خودتان ارسال/پاک کنید و جلسه را دوباره شروع کنید.';
+    return `ارتباط با کادر پیام برقرار نشد (${reason}). ساختار سایت ممکن است تغییر کرده باشد؛ اتصال متوقف شد.`;
   }
 
   schedule() {
@@ -148,23 +183,32 @@ class TerminalAgent {
     this.polling = true;
     const epoch = this.epoch;
     try {
-      if (Date.now() - this.session.lastActivity > 600000) throw new Error('زمان انتظار ۱۰ دقیقه‌ای پایان یافت؛ برای ادامه جلسهٔ تازه شروع کنید.');
+      this.ensureUnexpired();
+      if (this.now() - this.session.lastActivity > 600000) throw new Error('زمان انتظار ۱۰ دقیقه‌ای پایان یافت؛ برای ادامه جلسهٔ تازه شروع کنید.');
       const snapshot = await this.site('snapshot');
       if (epoch !== this.epoch) return;
+      if (snapshot.offline || snapshot.diagnostic !== 'ready') throw new Error(`کادر گفتگو آفلاین یا ناسازگار شد (${snapshot.diagnostic})؛ مجوزهای جلسه باطل شدند.`);
       if (snapshot.busy) return;
       const requests = new Map();
       for (const text of Array.isArray(snapshot.blocks) ? snapshot.blocks.slice(-40) : []) {
         const request = readRequest(text, this.session.id, this.session.seq);
         if (request) requests.set(JSON.stringify(request), request);
       }
-      if (requests.size > 1) throw new Error('چند درخواست متفاوت پیدا شد؛ اتصال متوقف شد. فقط حالت تک‌مدلی پشتیبانی می‌شود.');
+      if (requests.size > 1) throw new Error('چند درخواست متفاوت پیدا شد؛ اتصال متوقف شد. فقط یک درخواست‌کننده در هر گفتگو پشتیبانی می‌شود.');
       if (requests.size === 0) { this.stable = ''; return; }
       const [[fingerprint, request]] = requests;
       // Wait for the same complete JSON in two snapshots, not partial streaming text.
       if (this.stable !== fingerprint) { this.stable = fingerprint; return; }
       if (!isTerminalSiteUrl(snapshot.url) || snapshot.url !== this.currentUrl()) throw new Error('صفحه هنگام خواندن درخواست تغییر کرد.');
-      this.session.pinnedUrl = snapshot.url;
-      this.update({ status: 'review', pending: request, message: 'درخواست فرمان در صفحه پیدا شد؛ منشأ و متن کامل آن را بررسی کنید. هنوز اجرا نشده است.' });
+      const reviewReasons = commandReviewReasons(request.command);
+      this.update({ status: 'review', pending: request, reviewReasons,
+        message: reviewReasons.length
+          ? 'این فرمان به‌دلیل الگوی پرخطر به بررسی دستی نیاز دارد؛ هنوز اجرا نشده است.'
+          : 'درخواست فرمان در صفحه پیدا شد؛ متن کامل آن را بررسی کنید. هنوز اجرا نشده است.' });
+      if (epoch !== this.epoch) return;
+      if (this.session.permissions?.autoExecute && reviewReasons.length === 0) {
+        await this.executePending({ session: this.session.id, seq: this.session.seq }, true);
+      }
     } catch (error) {
       if (epoch === this.epoch) this.pause(error.message);
     } finally {
@@ -174,6 +218,7 @@ class TerminalAgent {
   }
 
   check(payload, status) {
+    this.ensureUnexpired();
     if (!this.session || this.state.status !== status || !payload || payload.session !== this.session.id
       || payload.seq !== this.session.seq) throw new Error('درخواست قدیمی است یا این عمل اکنون مجاز نیست.');
     if (!isTerminalSiteUrl(this.currentUrl()) || (this.session.pinnedUrl && this.currentUrl() !== this.session.pinnedUrl)) {
@@ -182,54 +227,86 @@ class TerminalAgent {
     }
   }
 
-  async approve(payload) {
+  async approve(payload) { return this.executePending(payload, false); }
+
+  // 'automatic' is private control flow, never read from an IPC/model payload.
+  async executePending(payload, automatic) {
     this.check(payload, 'review');
     const pending = this.state.pending;
     const epoch = this.epoch;
     const cwd = this.folder;
-    this.update({ status: 'confirming', message: 'در انتظار تأیید نهایی دستور در پنجرهٔ سیستم…' });
-    const { response } = await this.dialog.showMessageBox(this.getWindow(), {
-      type: 'warning', title: 'اجرای فرمان محلی PowerShell',
-      message: 'متن زیر با همهٔ دسترسی‌های کاربر فعلی اجرا می‌شود، نه داخل sandbox.',
-      detail: `پوشه: ${cwd}\n\n${pending.command}\n\nبه توضیح مدل به‌عنوان تضمین ایمنی اعتماد نکنید. این دستور ممکن است فایل‌ها را تغییر دهد یا اطلاعات را به شبکه بفرستد.`,
-      buttons: ['همین دستور را اجرا کن', 'لغو'], defaultId: 1, cancelId: 1, noLink: true,
-    });
-    if (epoch !== this.epoch || this.state.pending !== pending) return this.snapshot();
-    if (response !== 0) {
-      this.update({ status: 'review', message: 'اجرا لغو شد؛ می‌توانید درخواست را رد یا اتصال را قطع کنید.' });
-      return this.snapshot();
+    const reviewReasons = commandReviewReasons(pending.command);
+    if (automatic) {
+      if (!this.session.permissions?.autoExecute || reviewReasons.length) throw new Error('اجرای خودکار این فرمان مجاز نیست.');
+    } else {
+      this.update({ status: 'confirming', message: 'در انتظار تأیید نهایی دستور در پنجرهٔ سیستم…' });
+      const { response } = await this.dialog.showMessageBox(this.getWindow(), {
+        type: 'warning', title: 'اجرای فرمان محلی PowerShell',
+        message: 'متن زیر با همهٔ دسترسی‌های کاربر فعلی اجرا می‌شود، نه داخل sandbox.',
+        detail: `پوشه: ${cwd}\n\n${pending.command}\n\n${reviewReasons.length ? `دلیل بررسی دستی: ${reviewReasons.join('؛ ')}\n\n` : ''}به توضیح مدل به‌عنوان تضمین ایمنی اعتماد نکنید. این دستور ممکن است فایل‌ها را تغییر دهد یا اطلاعات را به شبکه بفرستد.`,
+        buttons: ['همین دستور را اجرا کن', 'لغو'], defaultId: 1, cancelId: 1, noLink: true,
+      });
+      if (epoch !== this.epoch || this.state.pending !== pending) return this.snapshot();
+      if (response !== 0) {
+        this.update({ status: 'review', message: 'اجرا لغو شد؛ می‌توانید درخواست را رد یا اتصال را قطع کنید.' });
+        return this.snapshot();
+      }
     }
-    this.check(payload, 'confirming');
+    this.check(payload, automatic ? 'review' : 'confirming');
     if (fs.realpathSync(cwd) !== cwd || !fs.statSync(cwd).isDirectory()) throw new Error('مسیر پوشه تغییر کرده است.');
-    this.update({ status: 'running', pending: null, result: null, shareText: '', message: 'PowerShell در حال اجرای دستور تأییدشده است؛ سقف زمان ۱۲۰ ثانیه.' });
+    this.update({ status: 'running', pending: null, result: null, shareText: '', reviewReasons: [],
+      message: automatic ? 'PowerShell با مجوز همین جلسه در حال اجراست؛ برای لغو «توقف» را بزنید.' : 'PowerShell در حال اجرای دستور تأییدشده است؛ سقف زمان ۱۲۰ ثانیه.' });
+    // Recheck after publication too: a synchronous revocation must win.
+    if (epoch !== this.epoch || !this.session) return this.snapshot();
     let result;
     try { result = await this.runner.run(pending.command, cwd); }
     catch (error) { result = { status: 'error', exitCode: null, stdout: '', stderr: '', error: error.message }; }
     if (epoch !== this.epoch) return this.snapshot();
-    this.update({ status: 'result', result, shareText: previewOutput(result),
-      message: 'اجرا تمام شد. هیچ خروجی به Arena ارسال نشده؛ متن قابل‌ارسال را بررسی کنید.' });
+    this.check(payload, 'running');
+    const outputReasons = outputReviewReasons(result);
+    // A manually reviewed risky command does NOT silently inherit auto-sharing.
+    const shareReasons = [...(reviewReasons.length ? ['خروجی فرمانی که نیازمند بررسی دستی بود'] : []), ...outputReasons];
+    this.update({ status: 'result', result, shareText: previewOutput(result), reviewReasons: shareReasons,
+      message: this.session.permissions?.autoShare && shareReasons.length
+        ? 'ارسال خودکار متوقف شد؛ این خروجی به بازبینی و ارسال دستی نیاز دارد.'
+        : 'اجرا تمام شد. خروجی هنوز ارسال نشده است؛ متن قابل‌ارسال را بررسی کنید.' });
+    if (epoch === this.epoch && this.session.permissions?.autoShare && shareReasons.length === 0) {
+      await this.shareResult(payload, true);
+    }
     return this.snapshot();
   }
 
   reject(payload) {
     this.check(payload, 'review');
     const result = { status: 'rejected', exitCode: null, stdout: '', stderr: '', error: 'The user rejected this command. Nothing was executed.' };
-    this.update({ status: 'result', pending: null, result, shareText: previewOutput(result), message: 'دستور اجرا نشد. می‌توانید نتیجهٔ ردکردن را برای مدل بفرستید.' });
+    this.update({ status: 'result', pending: null, result, shareText: previewOutput(result), reviewReasons: [],
+      message: 'دستور اجرا نشد. می‌توانید نتیجهٔ ردکردن را برای مدل بفرستید؛ خودکار ارسال نمی‌شود.' });
     return this.snapshot();
   }
 
-  async share(payload) {
+  async share(payload) { return this.shareResult(payload, false); }
+
+  async shareResult(payload, automatic) {
     this.check(payload, 'result');
+    if (automatic && (!this.session.permissions?.autoShare || this.state.reviewReasons.length
+      || outputReviewReasons(this.state.result).length)) throw new Error('ارسال خودکار این خروجی مجاز نیست.');
     const epoch = this.epoch;
-    const message = resultMessage(this.session.id, this.session.seq, this.state.result, payload.text);
-    this.update({ status: 'sharing', message: 'در حال ارسال فقط متن بازبینی‌شدهٔ خروجی به گفتگو…' });
+    const text = automatic ? this.state.shareText : payload.text;
+    const message = resultMessage(this.session.id, this.session.seq, this.state.result, text);
+    this.update({ status: 'sharing', message: automatic
+      ? 'در حال ارسال خروجی با مجوز ارسال خودکار همین جلسه…'
+      : 'در حال ارسال فقط متن بازبینی‌شدهٔ خروجی به گفتگو…' });
     try {
       await this.post(message, epoch);
       if (epoch !== this.epoch) return this.snapshot();
       this.session.seq += 1;
       this.stable = '';
-      if (this.session.seq > MAX_STEPS) return this.pause('سقف ۲۰ فرمان این جلسه تمام شد؛ هیچ فرمان دیگری اجرا نمی‌شود.');
-      this.update({ status: 'waiting', pending: null, result: null, shareText: '', message: 'خروجی بازبینی‌شده فرستاده شد؛ منتظر پاسخ بعدی مدل هستیم.' });
+      if (this.session.seq > MAX_STEPS) {
+        this.update({ result: null, shareText: '' });
+        return this.pause('سقف ۲۰ فرمان این جلسه تمام شد؛ مجوزهای خودکار باطل شدند.');
+      }
+      this.update({ status: 'waiting', pending: null, result: null, shareText: '', reviewReasons: [],
+        message: automatic ? 'خروجی با مجوز همین جلسه فرستاده شد؛ مدل/Agent می‌تواند ادامه دهد.' : 'خروجی بازبینی‌شده فرستاده شد؛ منتظر پاسخ بعدی مدل هستیم.' });
       this.schedule();
     } catch (error) {
       if (epoch === this.epoch) this.pause(error.message);
@@ -239,27 +316,44 @@ class TerminalAgent {
 
   pause(message) {
     clearTimeout(this.timer);
+    clearTimeout(this.expiryTimer);
     this.epoch += 1;
     this.session = null;
     this.stable = '';
-    this.update({ status: 'paused', pending: null, message });
-    if (this.runner.running) void this.runner.stop().catch(() => {});
+    this.update({ status: 'paused', pending: null, reviewReasons: [], message });
+    if (this.runner.running) {
+      const epoch = this.epoch;
+      const warn = (warning) => {
+        if (epoch === this.epoch) this.update({ stopWarning: warning,
+          message: warning ? `${message}\n${warning}` : message });
+      };
+      void this.runner.stop().then((result) => warn(result?.error || null))
+        .catch(() => warn('توقف فرایند تأیید نشد؛ Task Manager را بررسی کنید.'));
+    }
+    return this.snapshot();
+  }
+
+  onDocumentChange(message = 'صفحه دوباره بارگذاری شد؛ اتصال و مجوزهای خودکار باطل شدند.') {
+    if (this.session) return this.pause(message);
     return this.snapshot();
   }
 
   onNavigation(url) {
-    if (this.session && (!isTerminalSiteUrl(url) || (this.session.pinnedUrl && this.session.pinnedUrl !== url))) {
-      this.pause('صفحه یا گفتگو تغییر کرد؛ اتصال ترمینال متوقف شد.');
+    if (this.session && (!isTerminalSiteUrl(url)
+      || (this.session.pinnedUrl && this.session.pinnedUrl !== url)
+      || (!this.session.pinnedUrl && !this.session.initialPosting && this.session.startUrl !== url))) {
+      this.pause('صفحه یا گفتگو تغییر کرد؛ اتصال و مجوزهای خودکار باطل شدند.');
     }
   }
 
   async disable() {
     clearTimeout(this.timer);
+    clearTimeout(this.expiryTimer);
     const epoch = ++this.epoch;
     this.session = null;
     this.stable = '';
     this.update({ status: this.runner.running ? 'stopping' : (this.folder ? 'ready' : 'off'),
-      pending: null, result: null, shareText: '', message: 'اتصال قطع شد؛ هیچ درخواست جدیدی اجرا یا ارسال نمی‌شود.' });
+      pending: null, result: null, shareText: '', reviewReasons: [], message: 'اتصال و مجوزها باطل شدند؛ درخواست جدیدی اجرا یا ارسال نمی‌شود.' });
     let stopWarning = null;
     try { stopWarning = (await this.runner.stop())?.error || null; }
     catch { stopWarning = 'توقف فرایند تأیید نشد؛ Task Manager را بررسی کنید.'; }

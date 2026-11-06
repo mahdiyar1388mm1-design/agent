@@ -67,3 +67,48 @@ test('reviewed output edits are preserved across status updates, and stale packe
   ui.update(packet);
   assert.equal(ui.byId('terminal-status').textContent, 'آمادهٔ تنظیم');
 });
+
+test('automatic options are initially unchecked and start sends independent explicit choices', async (t) => {
+  const ui = await fixture(t);
+  assert.equal(ui.byId('terminal-auto-execute').checked, false);
+  assert.equal(ui.byId('terminal-auto-share').checked, false);
+  ui.byId('terminal-task').value = 'Run the project tests';
+  ui.byId('terminal-auto-execute').checked = true;
+  ui.byId('terminal-start').click();
+  assert.equal(ui.calls[0].action, 'start');
+  assert.equal(ui.calls[0].payload.autoExecute, true);
+  assert.equal(ui.calls[0].payload.autoShare, false);
+  assert.equal(ui.calls[0].payload.task, 'Run the project tests');
+  assert.equal(ui.byId('terminal-auto-share').disabled, true);
+  ui.finish({ ...ui.initial, revision: 1 }); await flush();
+});
+
+test('session choices are locked while active, visible as granted, and reset on revocation', async (t) => {
+  const ui = await fixture(t);
+  ui.update({ revision: 1, session: 'active', status: 'waiting', autoExecute: true, autoShare: true, expiresAt: Date.now() + 60000 });
+  assert.equal(ui.byId('terminal-auto-execute').checked, true);
+  assert.equal(ui.byId('terminal-auto-share').checked, true);
+  assert.equal(ui.byId('terminal-auto-execute').disabled, true);
+  assert.equal(ui.byId('terminal-task').disabled, true);
+  assert.match(ui.byId('terminal-mode').textContent, /ارسال خودکار: روشن/);
+  assert.equal(ui.byId('terminal-disable').disabled, false);
+  ui.update({ revision: 2, status: 'paused', session: null });
+  assert.equal(ui.byId('terminal-auto-execute').checked, false);
+  assert.equal(ui.byId('terminal-auto-share').checked, false);
+  assert.equal(ui.byId('terminal-auto-share').disabled, false);
+  assert.match(ui.byId('terminal-mode').textContent, /فعال نیست/);
+});
+
+test('risky-command/output explanations are text only and pending process termination remains stoppable', async (t) => {
+  const ui = await fixture(t);
+  ui.update({ revision: 1, status: 'result', session: 'active', reviewReasons: ['<img src=x>', 'Potential secret'],
+    autoExecute: true, autoShare: true, result: { status: 'completed', stdout: 'local output' }, shareText: '[REDACTED]' });
+  assert.equal(ui.byId('terminal-review-reasons').hidden, false);
+  assert.match(ui.byId('terminal-review-reasons').textContent, /<img src=x>/);
+  assert.equal(ui.byId('terminal-review-reasons').querySelector('img'), null);
+  assert.equal(ui.byId('terminal-share').disabled, false);
+  ui.update({ revision: 2, status: 'paused', session: null, busy: true });
+  assert.equal(ui.byId('terminal-disable').disabled, false);
+  assert.equal(ui.byId('terminal-start').disabled, true);
+  assert.equal(ui.byId('terminal-review-reasons').hidden, true);
+});

@@ -83,7 +83,7 @@
       <div><h2>ترمینال محلی AI</h2><small>POWERSHELL / EXPERIMENTAL</small></div>
       <button class="icon-button" id="terminal-close" aria-label="بستن پنل ترمینال" title="بستن پنل؛ جلسهٔ فعال قطع نمی‌شود">×</button>
     </div>
-    <p class="terminal-note">مدلِ انتخاب‌شده در چت Arena می‌تواند درخواست فرمان بدهد. هر اجرا تأیید جداگانه می‌خواهد. پوشهٔ انتخابی sandbox نیست؛ فرمان می‌تواند به فایل‌ها و شبکهٔ خارج از آن هم دسترسی داشته باشد.</p>
+    <p class="terminal-note">مدل/Agent داخل Arena می‌تواند از پل پیام برای اجرای فرمان استفاده کند. برای ادامهٔ خودکار، دو اجازهٔ زیر را پیش از شروع انتخاب کنید. پوشهٔ انتخابی sandbox نیست؛ فرمان به فایل‌ها و شبکه با دسترسی واقعی شما دسترسی دارد.</p>
     <p id="terminal-support" hidden>اجرای PowerShell این نسخه فقط روی Windows پشتیبانی می‌شود.</p>
     <div class="terminal-folder-row">
       <button class="secondary-button" id="terminal-choose" data-terminal="choose-folder">انتخاب پوشه</button>
@@ -91,12 +91,20 @@
     </div>
     <label class="terminal-label" for="terminal-task">درخواست تو از مدل انتخاب‌شده</label>
     <textarea id="terminal-task" maxlength="4000" rows="3" placeholder="مثلاً: فایل‌های این پروژه را بررسی کن و بگو چطور اجرا می‌شود."></textarea>
+    <fieldset class="terminal-permissions" aria-describedby="terminal-permissions-help">
+      <legend>مجوزهای خودکار؛ فقط همین جلسه</legend>
+      <label><input type="checkbox" id="terminal-auto-execute"><span>اجرای فرمان‌ها بدون تأیید تک‌تک</span></label>
+      <label><input type="checkbox" id="terminal-auto-share"><span>ارسال خودکار خروجی به Arena و مدل/Agent</span></label>
+      <p id="terminal-permissions-help">هر دو اختیاری و در ابتدا خاموش‌اند. مجوز نهایی یک‌بار در پنجرهٔ شروع گرفته می‌شود؛ حداکثر ۳۰ دقیقه یا ۲۰ درخواست. موارد علامت‌خورده برای بررسی دستی می‌ایستند. تشخیص خطر/اسرار ناقص است؛ خودکارسازی ممکن است به تغییر فایل یا نشت اطلاعات منجر شود.</p>
+    </fieldset>
     <div class="terminal-controls">
       <button class="primary-button" id="terminal-start" data-terminal="start" disabled>ارسال درخواست و شروع</button>
       <button class="secondary-button terminal-stop" id="terminal-disable" data-terminal="disable" disabled>توقف و قطع اتصال</button>
     </div>
     <div class="terminal-status-row"><span id="terminal-status" role="status">غیرفعال</span><span id="terminal-step">جلسه‌ای فعال نیست</span></div>
-    <p id="terminal-message" role="status">یک گفتگوی تک‌مدلی در Arena باز کنید و پوشهٔ پروژه را انتخاب کنید.</p>
+    <p id="terminal-mode" class="terminal-mode" role="status">مجوز خودکاری فعال نیست.</p>
+    <p id="terminal-message" role="status">یک گفتگو با کادر ارسال یکتا در Arena باز کنید و پوشهٔ پروژه را انتخاب کنید.</p>
+    <p id="terminal-review-reasons" class="terminal-review-reasons" role="status" hidden></p>
     <p id="terminal-error" role="alert" hidden></p>
     <section class="terminal-block" id="terminal-pending" hidden>
       <h3>فرمانِ تشخیص‌داده‌شده در صفحه</h3>
@@ -109,14 +117,14 @@
       </div>
     </section>
     <section class="terminal-block" id="terminal-result" hidden>
-      <h3>خروجی محلی؛ هنوز ارسال نشده</h3>
+      <h3>خروجی آخرین اجرای محلی</h3>
       <pre class="terminal-pre" id="terminal-output" dir="ltr"></pre>
       <label class="terminal-label" for="terminal-share-text">متنی که به Arena و مدل انتخابی فرستاده می‌شود</label>
       <textarea id="terminal-share-text" maxlength="12000" rows="7" dir="ltr" spellcheck="false"></textarea>
       <p class="hint">حذف خودکار بعضی الگوهای رمز فقط کمکی است و همهٔ اسرار را تشخیص نمی‌دهد. متن را بازبینی و بخش‌های حساس را حذف کنید؛ با زدن دکمهٔ زیر این متن از سیستم شما خارج می‌شود.</p>
       <button class="primary-button" id="terminal-share" data-terminal="share">ارسال همین خروجی به مدل</button>
     </section>
-    <p class="terminal-footer">اتصال رسمی Arena نیست؛ چت تک‌مدلی و تشخیص کادر ارسال لازم است. تغییر سایت یا پاسخ ناسازگار مدل ممکن است اتصال را متوقف کند. ترمینال پس از بازکردن دوبارهٔ برنامه همیشه غیرفعال است. با انتخاب پوشه، مدل خودکار به همهٔ فایل‌ها دسترسی نمی‌گیرد؛ دسترسی فایل فقط از فرمان تأییدشده حاصل می‌شود.</p>
+    <p class="terminal-footer">این پل، ابزار رسمی Agent نیست و محیط ابری Agent را به ویندوز منتقل نمی‌کند. در چت/Agent دارای یک کادر پیام سازگار و درخواست ساختاریافته قابل استفاده است؛ سازگاری همهٔ حالت‌ها تضمین نمی‌شود. قابلیت‌های حساب همچنان متعلق به خود سایت‌اند. تغییر گفتگو، توقف، پایان مهلت و خروج از برنامه مجوزها را باطل می‌کنند. بستن فقط پنل، جلسه را متوقف نمی‌کند.</p>
   </aside>
 </body>
 </html>

@@ -4,6 +4,9 @@
 // no require, Electron bridge, Node integration, cookies or private site APIs.
 function siteAdapter(input) {
   if (input.expiresAt < Date.now()) return { ok: false, reason: 'expired' };
+  if (navigator.onLine === false) return input.action === 'snapshot'
+    ? { url: location.href, diagnostic: 'offline', offline: true, busy: false, blocks: [] }
+    : { ok: false, reason: 'offline' };
   const visible = (element) => Boolean(element && element.getClientRects().length
     && getComputedStyle(element).visibility !== 'hidden' && !element.closest('[hidden], [aria-hidden="true"]'));
   const root = document.querySelector('main') || document.body;

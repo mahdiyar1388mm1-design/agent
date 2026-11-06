@@ -22,6 +22,12 @@ async function setup(t, { lock = true } = {}) {
   const dialogs = [];
   const responses = [];
   const handlers = new Map();
+  let terminalAgent;
+  const { TerminalAgent } = require('../src/terminal-agent.cjs');
+  class ObservedTerminalAgent extends TerminalAgent {
+    constructor(options) { super(options); terminalAgent = this; }
+  }
+  t.after(() => terminalAgent?.disable());
   let quit = false;
 
   class Contents extends EventEmitter {
@@ -110,13 +116,14 @@ async function setup(t, { lock = true } = {}) {
     URL,
     Buffer,
     process: { platform: 'win32' },
-    require: (name) => name === 'electron' ? electron : name.startsWith('./') ? require(`../src/${name.slice(2)}`) : require(name),
+    require: (name) => name === 'electron' ? electron : name === './terminal-agent.cjs'
+      ? { TerminalAgent: ObservedTerminalAgent } : name.startsWith('./') ? require(`../src/${name.slice(2)}`) : require(name),
   });
   await flush();
   const window = windows[0];
   const event = window ? { sender: window.webContents, senderFrame: window.webContents.mainFrame } : {};
   return {
-    windows, views, window, view: views[0], opened, dialogs, responses, handlers, profile, paths,
+    windows, views, window, view: views[0], opened, dialogs, responses, handlers, profile, paths, terminalAgent,
     quit: () => quit,
     state: () => handlers.get('arena:state')(event),
     action: (action) => handlers.get('arena:action')(event, action),
@@ -247,8 +254,46 @@ test('terminal IPC is unreachable from the remote site, subframes and wrong loca
   assert.throws(() => read({ sender: app.window.webContents, senderFrame: { url: app.window.webContents.url } }), /Untrusted/);
   const event = { sender: app.window.webContents, senderFrame: app.window.webContents.mainFrame };
   assert.equal(read(event).status, 'off');
+  assert.equal(read(event).autoExecute, false);
+  assert.equal(read(event).autoShare, false);
+  assert.equal(read(event).expiresAt, null);
   assert.throws(() => action(event, 'exec', { command: 'MUST NOT EXECUTE' }), /Untrusted/);
   assert.throws(() => action(event, 'start', 'not an object'), /Invalid terminal payload/);
   app.window.webContents.mainFrame.url = 'https://arena.ai';
   assert.throws(() => action(event, 'choose-folder'), /Untrusted/);
+});
+
+
+test('automatic steps do not repeatedly reopen the panel, but genuine manual-review exceptions do', async (t) => {
+  const app = await setup(t);
+  const agent = app.terminalAgent;
+  // Publish real controller snapshots; do not start a shell process in this test.
+  agent.session = { id: 'fixture', seq: 1, permissions: { autoExecute: true, autoShare: true } };
+  agent.update({ status: 'review', pending: { command: 'Get-Date' }, reviewReasons: [] });
+  assert.equal(app.state().terminalOpen, false);
+  agent.update({ status: 'result', pending: null, reviewReasons: [] });
+  assert.equal(app.state().terminalOpen, false);
+  agent.update({ status: 'review', pending: { command: 'Remove-Item ./temp' }, reviewReasons: ['Deletion'] });
+  assert.equal(app.state().terminalOpen, true);
+  app.action('terminal');
+  assert.equal(app.state().terminalOpen, false);
+  agent.update({ status: 'result', pending: null, reviewReasons: ['Sensitive output'] });
+  assert.equal(app.state().terminalOpen, true);
+});
+
+test('main-document reloads and connection failure revoke grants, but subframe loading does not', async (t) => {
+  const app = await setup(t);
+  const agent = app.terminalAgent;
+  const contents = app.view.webContents;
+  agent.session = { id: 'fixture', seq: 1, permissions: { autoExecute: true, autoShare: true } };
+  contents.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false });
+  assert.equal(agent.snapshot().autoExecute, true);
+  contents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true });
+  assert.equal(agent.snapshot().autoExecute, true);
+  contents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false });
+  assert.equal(agent.snapshot().autoExecute, false);
+  agent.session = { id: 'another', seq: 1, permissions: { autoExecute: true, autoShare: true } };
+  contents.emit('did-fail-load', {}, -105, 'ERR_NAME_NOT_RESOLVED', 'https://arena.ai/', true);
+  assert.equal(agent.snapshot().session, null);
+  assert.equal(agent.snapshot().autoShare, false);
 });

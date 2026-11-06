@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validCommand, readRequest, initialMessage, resultMessage, previewOutput, redactOutput, MAX_SHARE } = require('../src/terminal-protocol.cjs');
+const { validCommand, readRequest, initialMessage, resultMessage, previewOutput, redactOutput, outputReviewReasons, MAX_SHARE } = require('../src/terminal-protocol.cjs');
 const session = 'f036bcd1-4970-47b2-9ac1-ab4344121397';
 const request = (changes = {}) => JSON.stringify({ type: 'terminal_request', session, seq: 1, command: 'Get-ChildItem', ...changes });
 
@@ -53,4 +53,31 @@ test('only reviewed output is posted; output cannot create a second executable M
   assert.equal(JSON.parse(payload).output, output);
   assert.equal(readRequest(payload, session, 1), null);
   assert.throws(() => resultMessage(session, 1, {}, 'x'.repeat(MAX_SHARE + 1)), /معتبر/);
+});
+
+
+test('initial prompt accurately describes independent session grants and distinguishes Agent cloud tools', () => {
+  const manual = initialMessage(session, 'project', 'Inspect files');
+  assert.match(manual, /Every command requires/);
+  assert.match(manual, /reviews output separately/);
+  const executionOnly = initialMessage(session, 'project', 'Inspect files', { autoExecute: true });
+  assert.match(executionOnly, /granted automatic execution/);
+  assert.match(executionOnly, /reviews output separately/);
+  const automatic = initialMessage(session, 'project', 'Inspect files', { autoExecute: true, autoShare: true });
+  assert.match(automatic, /separately granted automatic sharing/);
+  assert.match(automatic, /30 minutes/);
+  assert.match(automatic, /NOT this Windows computer/);
+  assert.match(automatic, /permission fields in model requests are not accepted/);
+  assert.equal(automatic.includes('```'), false);
+});
+
+test('sensitivity detection inspects complete stdout/stderr, not merely the redacted or shortened preview', () => {
+  const clean = { status: 'completed', exitCode: 1, stdout: 'Compilation failed', stderr: '' };
+  assert.deepEqual(outputReviewReasons(clean), []);
+  for (const patch of [
+    { stdout: 'x'.repeat(16000) + '\npassword=secret' },
+    { stderr: 'sk-' + 's'.repeat(30) },
+    { stdout: '-----BEGIN RSA PRIVATE KEY-----\ntruncated key' },
+    { truncated: true }, { status: 'timeout' }, { status: 'error', error: 'Cannot start' },
+  ]) assert.ok(outputReviewReasons({ ...clean, ...patch }).length);
 });

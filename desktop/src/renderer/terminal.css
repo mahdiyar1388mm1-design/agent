@@ -30,3 +30,13 @@
 #terminal-error, #terminal-support { color: #ffb5aa; padding: 10px 12px; border: 1px solid #ffb5aa30; background: #ffb5aa08; border-radius: 8px; font-size: 11px; line-height: 1.9; }
 .terminal-footer { font-size: 10px; color: #8998ae; margin-top: 25px; line-height: 1.9; }
 @media (max-width: 1050px) { .terminal-button span { display: none; } }
+
+.terminal-permissions { border: 1px solid #b9f4cf25; border-radius: 10px; margin: 18px 0 0; padding: 12px; min-width: 0; }
+.terminal-permissions legend { color: var(--green); font-size: 11px; padding: 0 6px; }
+.terminal-permissions label { display: flex; align-items: flex-start; gap: 8px; line-height: 1.9; margin: 7px 0; cursor: pointer; }
+.terminal-permissions input { margin: 5px 0 0; flex-shrink: 0; accent-color: var(--green); }
+.terminal-permissions input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.terminal-permissions p { color: #a9b7cb; font-size: 10px; margin: 10px 0 0; }
+.terminal-mode { color: var(--green); font-size: 10px; }
+.terminal-review-reasons { color: #f1cfaa; border-right: 2px solid #f1cfaa; padding: 0 10px; font-size: 11px; }
+.terminal-panel textarea:disabled { opacity: .65; }
