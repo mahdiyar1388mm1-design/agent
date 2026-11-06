@@ -82,6 +82,9 @@ async function verify() {
     fs.writeFileSync(path.join(output, 'SHA256SUMS.txt'), `${checksum}  ${name}\n`);
     fs.copyFileSync(path.join(root, 'README.md'), path.join(output, 'README.fa.md'));
     console.log(`SHA256 ${checksum}  ${name}`);
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      console.log(`::notice title=Installer SHA-256::${checksum}  ${name}`);
+    }
   }
 }
 

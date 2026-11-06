@@ -14,7 +14,7 @@
   "scripts": {
     "start": "electron .",
     "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer/shell.js && node --check scripts/check-package.cjs",
-    "test": "node --test",
+    "test": "node --test --test-reporter=spec",
     "dist:win": "npm run check && npm test && electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never && node scripts/check-package.cjs --installer",
     "pack:win": "electron-builder --config electron-builder.config.cjs --win --x64 --dir --publish never && node scripts/check-package.cjs"
   },
