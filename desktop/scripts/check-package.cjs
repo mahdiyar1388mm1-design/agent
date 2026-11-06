@@ -16,6 +16,12 @@ async function sha256(filename) {
   return hash.digest('hex');
 }
 
+function packedFile(archive, relative) {
+  // ASAR 3 traverses nested directories using path.sep. A forward-slash path
+  // must be normalized on Windows, even though fs APIs accept both forms.
+  return asar.extractFile(archive, path.normalize(relative));
+}
+
 function filesBelow(directory, prefix = '') {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const relative = path.posix.join(prefix, entry.name);
@@ -43,14 +49,14 @@ async function verify() {
   assert.ok(translations.some((language) => version.getStringValues(language).ProductName === 'Arena Desktop'));
   assert.ok(ResEdit.Resource.IconGroupEntry.fromEntries(resources.entries).length > 0, 'Missing application icon');
 
-  const packed = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8'));
+  const packed = JSON.parse(packedFile(archive, 'package.json').toString('utf8'));
   assert.equal(packed.version, pkg.version);
   assert.equal(packed.main, 'src/main.cjs');
   for (const relative of [
     ...filesBelow(path.join(root, 'src'), 'src'),
     'assets/icon.svg', 'assets/icon.png', 'assets/icon.ico', 'README.md',
   ]) {
-    assert.deepEqual(asar.extractFile(archive, relative), fs.readFileSync(path.join(root, relative)), `Stale or missing packed file: ${relative}`);
+    assert.deepEqual(packedFile(archive, relative), fs.readFileSync(path.join(root, relative)), `Stale or missing packed file: ${relative}`);
   }
   const integrityResource = resources.entries.find((entry) => entry.type === 'INTEGRITY' && entry.id === 'ELECTRONASAR');
   assert.ok(integrityResource, 'Missing embedded ASAR integrity resource');
@@ -88,7 +94,11 @@ async function verify() {
   }
 }
 
-verify().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  verify().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { packedFile, filesBelow };
