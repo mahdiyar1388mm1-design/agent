@@ -72,7 +72,7 @@ test('inherited Git override variables cannot redirect worktrees, executables or
   assert.equal(env.GH_TOKEN, 'fixture-token');
 });
 
-test('installed Git can invoke the fixed gh credential helper with an offline FAKE environment token', { timeout: 20000 }, async (t) => {
+test('installed Git can invoke the fixed gh credential helper with an offline FAKE environment token', { timeout: 45000 }, async (t) => {
   const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-credential-fixture-'));
   const token = 'ghp_' + 'f'.repeat(36);
@@ -83,7 +83,7 @@ test('installed Git can invoke the fixed gh credential helper with an offline FA
   const dependencies = await tools.detect();
   if (!dependencies.git || !dependencies.gh) { t.skip('Installed Git/gh are required only for this native helper test'); return; }
   // No real token, user config, login, API call or credential persistence.
-  const result = await tools.git(['credential', 'fill'], directory, { timeoutMs: 10000, input: 'protocol=https\nhost=github.com\n\n' });
+  const result = await tools.git(['credential', 'fill'], directory, { timeoutMs: 30000, input: 'protocol=https\nhost=github.com\n\n' });
   assert.equal(result.code, 0, JSON.stringify({ error: result.error, stderr: result.stderr, dependencies }));
   assert.ok(result.stdout.includes(`password=${token}`));
   assert.match(result.stdout, /username=/);

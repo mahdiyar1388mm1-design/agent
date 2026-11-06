@@ -61,7 +61,7 @@ class GitHubTools {
     }
     for (const candidate of candidates) {
       try {
-        if (fs.statSync(candidate).isFile()) return fs.realpathSync(candidate);
+        if (fs.statSync(candidate).isFile()) return fs.realpathSync.native(candidate);
       } catch { /* Try the next installed location. */ }
     }
     return null;

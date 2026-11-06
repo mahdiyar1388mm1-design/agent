@@ -93,12 +93,14 @@ async function fixture(t) {
   await manager.check();
   const clone = async (branch = 'main') => {
     await manager.chooseParent(); responses.push(0);
-    return manager.clone({ repository: repo.fullName, branch });
+    const state = await manager.clone({ repository: repo.fullName, branch });
+    assert.equal(state.status, 'ready', state.message); return state;
   };
   const local = async (files = { 'app.txt': 'ready project\n' }) => {
     const folder = path.join(root, `ready-${fs.readdirSync(root).length}`); fs.mkdirSync(folder);
     for (const [name, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(folder, name)), { recursive: true }); fs.writeFileSync(path.join(folder, name), text); }
-    data.pick = folder; await manager.chooseProject(); return folder;
+    data.pick = folder; const state = await manager.chooseProject();
+    assert.equal(state.status, 'ready', state.message); return state.project.folder;
   };
   const cloudChange = async (text) => { fs.writeFileSync(path.join(seed, 'README.md'), text); await commit('Cloud agent change'); await native(['push', 'origin', 'HEAD:refs/heads/main']); };
   return { manager, tools, root, seed, repo, data, responses, dialogs, gitCalls, ghCalls, attached, handoffs, native, commit, clone, local, cloudChange, remotes };

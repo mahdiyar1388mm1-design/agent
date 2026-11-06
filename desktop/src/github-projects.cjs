@@ -9,6 +9,7 @@ const { isTerminalSiteUrl } = require('./policy.cjs');
 const { repository, branchName, folderName, safeRelative, excludedFile, sensitiveContent, projectMessage,
   EXCLUDES, WATCH_MS, POLL_MS, MAX_FILES, MAX_FILE_BYTES, MAX_TOTAL_BYTES } = require('./github-policy.cjs');
 
+// Native realpath expands Windows 8.3 aliases; legacy realpath can disagree with Git.
 const samePath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 const oid = (value) => /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
 const splitFiles = (text) => [...new Set(text.split('\0').filter(Boolean))];
@@ -173,7 +174,7 @@ class GitHubProjects {
     const result = await this.dialog.showOpenDialog(this.getWindow(), { title, properties: ['openDirectory'] });
     this.assert(op);
     if (result.canceled || result.filePaths.length !== 1) return null;
-    const folder = fs.realpathSync(result.filePaths[0]);
+    const folder = fs.realpathSync.native(result.filePaths[0]);
     if (!fs.statSync(folder).isDirectory() || /[\u0000-\u001f\u202a-\u202e\u2066-\u2069]/.test(folder)) throw new Error('مسیر پوشه معتبر نیست.');
     return folder;
   }
@@ -186,13 +187,13 @@ class GitHubProjects {
   }
 
   async inspect(op, folder) {
-    if (!samePath(fs.realpathSync(folder), folder) || !fs.statSync(folder).isDirectory()) throw new Error('مسیر پروژه تغییر کرده است.');
+    if (!samePath(fs.realpathSync.native(folder), folder) || !fs.statSync(folder).isDirectory()) throw new Error('مسیر پروژه تغییر کرده است.');
     const root = await this.git(op, ['rev-parse', '--show-toplevel'], folder, { allowFailure: true });
     if (root.code !== 0) {
       if (fs.existsSync(path.join(folder, '.git'))) throw new Error('ساختار Git این پوشه معتبر نیست؛ چیزی بازنویسی نمی‌شود.');
       return { folder, repo: null, branch: '', head: null, dirty: true, isGit: false };
     }
-    if (!samePath(fs.realpathSync(root.stdout.trim()), folder)) throw new Error('پوشه باید ریشهٔ دقیق پروژه باشد؛ پوشهٔ داخل یک مخزن دیگر پذیرفته نمی‌شود.');
+    if (!samePath(fs.realpathSync.native(root.stdout.trim()), folder)) throw new Error('پوشه باید ریشهٔ دقیق پروژه باشد؛ پوشهٔ داخل یک مخزن دیگر پذیرفته نمی‌شود.');
     const remote = await this.git(op, ['remote', 'get-url', 'origin'], folder, { allowFailure: true });
     const branch = await this.git(op, ['symbolic-ref', '--quiet', '--short', 'HEAD'], folder, { allowFailure: true });
     const head = await this.git(op, ['rev-parse', '--verify', 'HEAD'], folder, { allowFailure: true });
@@ -224,7 +225,7 @@ class GitHubProjects {
       const repo = repository(payload?.repository);
       await this.ensureTools(op); await this.account(op);
       const parent = this.state.parent;
-      if (!parent || !samePath(fs.realpathSync(parent), parent)) throw new Error('ابتدا پوشهٔ والد دانلود را انتخاب کنید.');
+      if (!parent || !samePath(fs.realpathSync.native(parent), parent)) throw new Error('ابتدا پوشهٔ والد دانلود را انتخاب کنید.');
       let branch = payload?.branch || '';
       if (branch) branch = branchName(branch);
       else {
@@ -234,9 +235,9 @@ class GitHubProjects {
       const target = path.join(parent, folderName(repo.fullName.split('/')[1]));
       if (fs.existsSync(target) || (() => { try { fs.lstatSync(target); return true; } catch { return false; } })()) throw new Error('پوشهٔ مقصد از قبل وجود دارد؛ والد دیگری انتخاب یا همان پروژه را با «پروژهٔ محلی» باز کنید.');
       if (!await this.consent(op, 'دانلود مخزن در یک پروژهٔ محلی تازه؟', `${repo.url}\nشاخه: ${branch}\nمقصد: ${target}\n\nکد فقط دانلود می‌شود؛ نصب وابستگی یا اجرای پروژه خودکار نیست. مخزن فرعی و Git LFS خودکار دریافت نمی‌شوند. به کد مخزن اعتماد کنید.`, 'دانلود همین مخزن')) return;
-      if (!samePath(fs.realpathSync(parent), parent) || fs.existsSync(target)) throw new Error('مقصد هنگام دریافت اجازه تغییر کرد.');
+      if (!samePath(fs.realpathSync.native(parent), parent) || fs.existsSync(target)) throw new Error('مقصد هنگام دریافت اجازه تغییر کرد.');
       await this.git(op, ['clone', '--no-recurse-submodules', '--single-branch', '--branch', branch, '--', repo.cloneUrl, target], parent);
-      this.setProject(op, await this.inspect(op, fs.realpathSync(target)));
+      this.setProject(op, await this.inspect(op, fs.realpathSync.native(target)));
       this.update({ status: 'ready', message: 'مخزن دانلود شد؛ می‌توانید کار را با Agent ادامه دهید یا دریافت خودکار را روشن کنید.' });
     });
   }
