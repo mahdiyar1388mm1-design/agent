@@ -24,6 +24,7 @@ class TerminalAgent {
     this.now = options.now || Date.now;
     this.autoPoll = options.autoPoll !== false;
     this.folder = '';
+    this.projectContext = null;
     this.session = null;
     this.epoch = 0;
     this.revision = 0;
@@ -40,7 +41,7 @@ class TerminalAgent {
     return { ...this.state, reviewReasons: [...this.state.reviewReasons],
       pending: this.state.pending ? { ...this.state.pending } : null,
       result: this.state.result ? { ...this.state.result } : null,
-      folder: this.folder, session: this.session?.id || null, busy: this.busy,
+      folder: this.folder, project: this.projectContext ? { ...this.projectContext } : null, session: this.session?.id || null, busy: this.busy,
       autoExecute: this.session?.permissions?.autoExecute === true,
       autoShare: this.session?.permissions?.autoShare === true,
       expiresAt: this.session?.expiresAt || null,
@@ -94,8 +95,41 @@ class TerminalAgent {
     const folder = fs.realpathSync(result.filePaths[0]);
     if (!fs.statSync(folder).isDirectory()) throw new Error('پوشهٔ انتخاب‌شده معتبر نیست.');
     this.folder = folder;
+    this.projectContext = null;
     this.update({ status: 'ready', message: 'پوشه انتخاب شد. یک گفتگو با کادر پیام یکتا در Arena باز کنید.' });
     return this.snapshot();
+  }
+
+  attachProject(project) {
+    if (this.session || this.busy) throw new Error('ابتدا جلسهٔ ترمینال AI را قطع کنید.');
+    const folder = fs.realpathSync(project.folder);
+    if (!fs.statSync(folder).isDirectory()) throw new Error('پوشهٔ پروژه معتبر نیست.');
+    this.folder = folder;
+    this.projectContext = project.repo ? { url: project.repo.url, branch: project.branch } : null;
+    this.update({ status: 'ready', pending: null, result: null, shareText: '', reviewReasons: [], message: 'پروژهٔ GitHub/محلی انتخاب شد؛ می‌توانید با ترمینال AI ادامه دهید.' });
+  }
+
+  async sendProjectMessage(message, guard) {
+    const url = this.currentUrl();
+    const verify = () => {
+      guard();
+      if (this.session || this.busy || this.currentUrl() !== url || !isTerminalSiteUrl(url)) throw new Error('گفتگو تغییر کرده یا ترمینال فعال است؛ ارسال متوقف شد.');
+    };
+    verify();
+    const snapshot = await this.site('snapshot');
+    verify();
+    if (snapshot.diagnostic !== 'ready' || snapshot.busy || snapshot.offline) throw new Error('کادر پیام یکتا، خالی و آمادهٔ Agent/چت لازم است.');
+    const prepared = await this.site('prepare', message);
+    verify();
+    if (!prepared.ok) throw new Error(this.adapterError(prepared.reason));
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.sleep(200); verify();
+      const sent = await this.site('send', message);
+      guard();
+      if (sent.ok) return;
+      if (sent.reason !== 'send-disabled') throw new Error(this.adapterError(sent.reason));
+    }
+    throw new Error('ارسال تأیید نشد؛ پیش‌نویس را بررسی کنید. پیام دوباره ارسال نمی‌شود.');
   }
 
   async start(payload) {
@@ -106,7 +140,8 @@ class TerminalAgent {
     // authorize them. Model JSON and subsequent action payloads cannot set grants.
     const permissions = requestedPermissions(payload);
     const id = randomUUID();
-    const message = initialMessage(id, path.basename(this.folder), payload?.task, permissions);
+    const context = this.projectContext ? `\n\nSelected GitHub project: ${this.projectContext.url}\nExact branch: ${JSON.stringify(this.projectContext.branch)}. Do not force-push, merge PRs or change branches without an explicit user request. GitHub authentication belongs to the installed gh CLI; never read/print tokens or credential files. A cloud Agent uses its own repository integration, not this local folder.\n` : '';
+    const message = initialMessage(id, path.basename(this.folder), payload?.task, permissions) + context;
     const epoch = ++this.epoch;
     const startUrl = this.currentUrl();
     this.session = { id, seq: 1, pinnedUrl: null, startUrl, initialPosting: false,

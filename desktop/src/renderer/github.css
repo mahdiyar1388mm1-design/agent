@@ -1,0 +1,23 @@
+.github-open .github-panel { display: block; }
+.github-open .placeholder { margin-right: min(420px, 60vw); }
+.github-button { color: #d4c4ff; border-color: #b39aff30; background: #b39aff08; }
+.github-panel .terminal-heading small { font-size: 8px; }
+.github-section { border-bottom: 1px solid #ffffff12; padding: 12px 0 18px; }
+.github-section h3 { font-size: 13px; color: #e2d7fd; font-weight: 500; margin: 0 0 14px; }
+.github-section .hint { color: #9eacc1; font-size: 10px; line-height: 1.95; }
+.github-panel input, .github-panel select { width: 100%; background: #0e131c; color: #e2e7f2; border: 1px solid #ffffff24; border-radius: 8px; padding: 10px; font: 11px/1.7 'Segoe UI', Tahoma, sans-serif; }
+.github-panel input[dir='ltr'], .github-panel select { text-align: left; direction: ltr; font-family: Consolas, monospace; }
+.github-panel input:focus-visible, .github-panel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.github-panel input:disabled, .github-panel select:disabled { opacity: .6; }
+.github-tool-links { display: flex; flex-wrap: wrap; gap: 14px; margin: 15px 0; }
+.github-tool-links button { border: 0; background: transparent; color: #bba7ff; font-size: 10px; padding: 3px 0; }
+.github-device { border: 1px solid #b39aff45; background: #b39aff09; border-radius: 10px; padding: 12px; }
+.github-device label { display: block; line-height: 1.9; font-size: 10px; margin-bottom: 8px; }
+.github-device input { font-size: 21px; letter-spacing: 3px; color: var(--green); user-select: text; margin-bottom: 10px; }
+.github-path { color: #a7b8cf; direction: ltr; text-align: left; font: 10px/1.8 Consolas, monospace; overflow-wrap: anywhere; user-select: text; }
+.github-spaced { margin-top: 12px; }
+.github-warning { font-size: 10px; color: #f1cfaa; border-right: 2px solid #f1cfaa; padding-right: 10px; }
+.github-bottom { padding-top: 14px; }
+#github-message, #github-dependencies, #github-account, #github-preview-summary { font-size: 11px; line-height: 1.9; color: #bdc7da; overflow-wrap: anywhere; }
+#github-error { color: #ffb5aa; padding: 10px; border: 1px solid #ffb5aa30; border-radius: 8px; font-size: 11px; }
+.github-button[data-status='watching'] { color: var(--green); border-color: #b9f4cf60; }

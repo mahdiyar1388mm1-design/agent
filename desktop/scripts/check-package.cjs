@@ -54,7 +54,7 @@ async function verify() {
   assert.equal(packed.main, 'src/main.cjs');
   for (const relative of [
     ...filesBelow(path.join(root, 'src'), 'src'),
-    'assets/icon.svg', 'assets/icon.png', 'assets/icon.ico', 'README.md', 'TERMINAL.md',
+    'assets/icon.svg', 'assets/icon.png', 'assets/icon.ico', 'README.md', 'TERMINAL.md', 'GITHUB.md',
   ]) {
     assert.deepEqual(packedFile(archive, relative), fs.readFileSync(path.join(root, relative)), `Stale or missing packed file: ${relative}`);
   }
@@ -87,7 +87,7 @@ async function verify() {
     const checksum = await sha256(filename);
     fs.writeFileSync(path.join(output, 'SHA256SUMS.txt'), `${checksum}  ${name}\n`);
     fs.copyFileSync(path.join(root, 'README.md'), path.join(output, 'README.fa.md'));
-    fs.copyFileSync(path.join(root, 'TERMINAL.md'), path.join(output, 'TERMINAL.md'));
+    for (const guide of ['TERMINAL.md', 'GITHUB.md']) fs.copyFileSync(path.join(root, guide), path.join(output, guide));
     console.log(`SHA256 ${checksum}  ${name}`);
     if (process.env.GITHUB_ACTIONS === 'true') {
       console.log(`::notice title=Installer SHA-256::${checksum}  ${name}`);

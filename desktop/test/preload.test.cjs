@@ -25,7 +25,7 @@ function loadBridge() {
 
 test('preload exposes only a frozen, narrowly scoped API', () => {
   const { bridge } = loadBridge();
-  assert.deepEqual(Object.keys(bridge).sort(), ['getState', 'getTerminalState', 'onState', 'onTerminalState', 'perform', 'terminal']);
+  assert.deepEqual(Object.keys(bridge).sort(), ['getGitHubState', 'getState', 'getTerminalState', 'github', 'onGitHubState', 'onState', 'onTerminalState', 'perform', 'terminal']);
   assert.equal(Object.isFrozen(bridge), true);
   assert.equal(bridge.send, undefined);
   assert.equal(bridge.invoke, undefined);
@@ -74,4 +74,20 @@ test('terminal bridge exposes only gated actions, never an exec/spawn primitive'
   assert.deepEqual(results, [[{ status: 'review' }]]);
   unsubscribe();
   assert.equal(ipc.listenerCount('arena:terminal-state-changed'), 0);
+});
+
+
+test('GitHub preload exposes only named project actions and strips subscription IPC events', async () => {
+  const { bridge, calls, ipc } = loadBridge();
+  await bridge.getGitHubState();
+  await bridge.github('clone', { repository: 'owner/project', branch: 'main' });
+  assert.equal(calls[0][0], 'arena:github-state');
+  assert.equal(calls[1][0], 'arena:github');
+  for (const action of ['exec', 'spawn', 'auth-token', 'set-folder', '__proto__', 'https://evil.invalid']) await assert.rejects(bridge.github(action), /Unsupported GitHub action/);
+  const results = [];
+  const dispose = bridge.onGitHubState((...args) => results.push(args));
+  ipc.emit('arena:github-state-changed', { privateEvent: true }, { watching: false });
+  assert.deepEqual(results, [[{ watching: false }]]);
+  dispose();
+  assert.equal(ipc.listenerCount('arena:github-state-changed'), 0);
 });

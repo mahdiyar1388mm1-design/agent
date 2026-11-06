@@ -23,6 +23,12 @@ async function setup(t, { lock = true } = {}) {
   const responses = [];
   const handlers = new Map();
   let terminalAgent;
+  let githubProjects;
+  const { GitHubProjects } = require('../src/github-projects.cjs');
+  class ObservedGitHubProjects extends GitHubProjects {
+    constructor(options) { super(options); githubProjects = this; }
+  }
+  t.after(async () => { await githubProjects?.cancel(); githubProjects?.dispose(); });
   const { TerminalAgent } = require('../src/terminal-agent.cjs');
   class ObservedTerminalAgent extends TerminalAgent {
     constructor(options) { super(options); terminalAgent = this; }
@@ -117,13 +123,14 @@ async function setup(t, { lock = true } = {}) {
     Buffer,
     process: { platform: 'win32' },
     require: (name) => name === 'electron' ? electron : name === './terminal-agent.cjs'
-      ? { TerminalAgent: ObservedTerminalAgent } : name.startsWith('./') ? require(`../src/${name.slice(2)}`) : require(name),
+      ? { TerminalAgent: ObservedTerminalAgent } : name === './github-projects.cjs'
+        ? { GitHubProjects: ObservedGitHubProjects } : name.startsWith('./') ? require(`../src/${name.slice(2)}`) : require(name),
   });
   await flush();
   const window = windows[0];
   const event = window ? { sender: window.webContents, senderFrame: window.webContents.mainFrame } : {};
   return {
-    windows, views, window, view: views[0], opened, dialogs, responses, handlers, profile, paths, terminalAgent,
+    windows, views, window, view: views[0], opened, dialogs, responses, handlers, profile, paths, terminalAgent, githubProjects,
     quit: () => quit,
     state: () => handlers.get('arena:state')(event),
     action: (action) => handlers.get('arena:action')(event, action),
@@ -296,4 +303,49 @@ test('main-document reloads and connection failure revoke grants, but subframe l
   contents.emit('did-fail-load', {}, -105, 'ERR_NAME_NOT_RESOLVED', 'https://arena.ai/', true);
   assert.equal(agent.snapshot().session, null);
   assert.equal(agent.snapshot().autoShare, false);
+});
+
+
+test('GitHub IPC requires the exact local top frame and rejects remote access, paths/actions and oversized payloads', async (t) => {
+  const app = await setup(t);
+  const read = app.handlers.get('arena:github-state');
+  const action = app.handlers.get('arena:github');
+  assert.throws(() => read({ sender: app.view.webContents, senderFrame: app.view.webContents.mainFrame }), /Untrusted/);
+  assert.throws(() => read({ sender: app.window.webContents, senderFrame: { url: app.window.webContents.url } }), /Untrusted/);
+  const event = { sender: app.window.webContents, senderFrame: app.window.webContents.mainFrame };
+  assert.equal(read(event).watching, false); assert.equal(read(event).account, null); assert.equal(read(event).busy, false);
+  assert.throws(() => action(event, 'exec', {}), /Untrusted/);
+  assert.throws(() => action(event, 'auth-token', {}), /Untrusted/);
+  assert.throws(() => action(event, 'clone', { repository: 'x'.repeat(17000) }), /Invalid GitHub payload/);
+  assert.throws(() => action(event, 'clone', []), /Invalid GitHub payload/);
+  app.window.webContents.mainFrame.url = 'https://arena.ai';
+  assert.throws(() => action(event, 'choose-project'), /Untrusted/);
+});
+
+test('GitHub and terminal panels are mutually exclusive, and native project selection attaches its folder internally', async (t) => {
+  const app = await setup(t);
+  app.action('github'); assert.equal(app.state().githubOpen, true); assert.equal(app.state().terminalOpen, false);
+  app.action('terminal'); assert.equal(app.state().githubOpen, false); assert.equal(app.state().terminalOpen, true);
+  assert.equal(app.view.bounds.width, 780);
+  const folder = fs.realpathSync(app.paths.appData);
+  app.githubProjects.onProject({ folder, repo: { url: 'https://github.com/owner/project' }, branch: 'main' });
+  assert.equal(app.terminalAgent.snapshot().folder, folder);
+  assert.equal(app.terminalAgent.snapshot().project.url, 'https://github.com/owner/project');
+});
+
+test('GitHub mutations cannot overlap terminal sessions; opening a local session revokes cloud download grants', async (t) => {
+  const app = await setup(t);
+  const event = { sender: app.window.webContents, senderFrame: app.window.webContents.mainFrame };
+  const terminal = app.handlers.get('arena:terminal');
+  app.githubProjects.operation = { epoch: 1, kind: 'fixture' };
+  assert.throws(() => terminal(event, 'start', { task: 'Test' }), /GitHub/);
+  app.githubProjects.operation = null;
+  app.githubProjects.watch = { expiresAt: Date.now() + 60000 };
+  await terminal(event, 'disable');
+  // choose-folder cancels the watch before opening any native picker (mocked out here).
+  app.terminalAgent.chooseFolder = async () => app.terminalAgent.snapshot();
+  await terminal(event, 'choose-folder');
+  assert.equal(app.githubProjects.snapshot().watching, false);
+  app.terminalAgent.session = { id: 'local-session', seq: 1 };
+  await assert.rejects(app.githubProjects.operationFor('fixture', async () => {}), /ترمینال/);
 });

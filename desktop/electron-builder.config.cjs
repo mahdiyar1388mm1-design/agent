@@ -19,6 +19,7 @@ module.exports = {
     'assets/icon.svg',
     'README.md',
     'TERMINAL.md',
+    'GITHUB.md',
     'package.json',
   ],
   electronFuses: {

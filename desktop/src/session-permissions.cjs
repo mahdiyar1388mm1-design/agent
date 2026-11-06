@@ -17,10 +17,10 @@ function requestedPermissions(payload) {
 const REVIEW_RULES = [
   [/\b(?:Remove-Item|Clear-Content|Remove-Partition|Format-Volume|diskpart|rm|rmdir|del|erase)\b|\bformat(?:\.com|\.exe)?\s+[a-z]:/i, 'حذف یا بازنویسی مخرب داده‌ها'],
   [/\bgit\s+(?:reset\b[^\r\n]*--hard|clean\b[^\r\n]*-[a-z]*f|rm\b)/i, 'حذف یا بازنشانی تغییرات Git'],
-  [/(?:\.ssh\b|\.aws\b|\.azure\b|\.kube\b|\.env(?:\b|\.)|\bid_(?:rsa|ed25519)\b|\bLogin Data\b|\bCookies\b|\b(?:Get-Credential|Get-Secret|Export-Clixml)\b|\b(?:Get-ChildItem|Get-Item|gci|dir)\s+Env:|\$env:[A-Z_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z_]*\b)/i, 'احتمال دسترسی به داده‌های ورود یا تنظیمات حساس'],
+  [/(?:\.ssh\b|\.aws\b|\.azure\b|\.kube\b|\.env(?:\b|\.)|\bid_(?:rsa|ed25519)\b|\bLogin Data\b|\bCookies\b|\b(?:Get-Credential|Get-Secret|Export-Clixml|Get-StoredCredential|cmdkey|vaultcmd)\b|\bgh(?:\.exe)?\s+auth\s+(?:token|git-credential)\b|(?:^|[\\/])(?:hosts\.yml|\.git-credentials)\b|\b(?:Get-ChildItem|Get-Item|gci|dir)\s+Env:|\$env:[A-Z_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)[A-Z_]*\b)/i, 'احتمال دسترسی به داده‌های ورود یا تنظیمات حساس'],
   [/(?:-Verb\s+['"]?RunAs\b|\b(?:Set-ExecutionPolicy|Set-MpPreference|Add-MpPreference|Disable-NetFirewallRule|Set-NetFirewallProfile|Stop-Service|Stop-Process|Stop-Computer|Restart-Computer)\b)/i, 'ارتقای دسترسی یا تغییر امنیت/فرایندهای سیستم'],
   [/\b(?:Invoke-Expression|iex|FromBase64String)\b|-(?:EncodedCommand|enc)\b|\[ScriptBlock\]::Create|\[char\]\s*\d|\.(?:ps1|bat|cmd)\b|\bcmd(?:\.exe)?\s+\/(?:c|k)\b|\b(?:wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin)\b|\b(?:node|python[\d.]*|bash|sh|cmd|powershell|pwsh)(?:\.exe)?\s+-(?:e|c|command)\b/i, 'اجرای پویا، کد مبهم یا اسکریپت واسط'],
-  [/(?:\b(?:Invoke-RestMethod|Invoke-WebRequest|irm|iwr)\b[^\r\n]*-Method\s+['"]?(?:Post|Put|Patch)\b|\bcurl(?:\.exe)?\b[^\r\n]*(?:--upload-file|--data(?:-binary)?\s+@|\s-T\s))/i, 'ارسال داده یا فایل به شبکه'],
+  [/(?:\bgit(?:\.exe)?\s+(?:push|send-email)\b|\bgh(?:\.exe)?\s+(?:repo\s+(?:create|delete|edit)|pr\s+(?:merge|close)|release\s+(?:create|delete))\b|\bgh(?:\.exe)?\s+api\b[^\r\n]*(?:-X|--method)\s+(?:POST|PUT|PATCH|DELETE)\b|\b(?:Invoke-RestMethod|Invoke-WebRequest|irm|iwr)\b[^\r\n]*-Method\s+['"]?(?:Post|Put|Patch)\b|\bcurl(?:\.exe)?\b[^\r\n]*(?:--upload-file|--data(?:-binary)?\s+@|\s-T\s))/i, 'ارسال داده یا فایل به شبکه'],
 ];
 
 function commandReviewReasons(command) {

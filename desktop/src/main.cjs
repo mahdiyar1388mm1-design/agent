@@ -7,10 +7,11 @@ const {
 } = require('electron');
 const {
   APP_URL, isAppUrl, isEmbeddedUrl, isSafeExternalUrl, isAllowedPopup,
-  navigationKind, originLabel, isAllowedAction, isTrustedSender, canGrantPermission, isAllowedTerminalAction, isTrustedTerminalSender,
+  navigationKind, originLabel, isAllowedAction, isTrustedSender, canGrantPermission, isAllowedTerminalAction, isTrustedTerminalSender, isAllowedGitHubAction,
 } = require('./policy.cjs');
 const { readWindowState, saveWindowState } = require('./window-state.cjs');
 const { TerminalAgent } = require('./terminal-agent.cjs');
+const { GitHubProjects } = require('./github-projects.cjs');
 
 const APP_ID = 'io.github.mahdiyar1388mm1.arena-desktop';
 const PARTITION = 'persist:arena-desktop';
@@ -39,6 +40,8 @@ let applicationMenu = null;
 let pendingExternal = false;
 let terminalAgent = null;
 let terminalOpen = false;
+let githubProjects = null;
+let githubOpen = false;
 let layoutSite = null;
 const popups = new Set();
 let state = {
@@ -49,6 +52,7 @@ let state = {
   origin: 'arena.ai',
   error: null,
   terminalOpen: false,
+  githubOpen: false,
 };
 
 function siteContents() {
@@ -211,7 +215,7 @@ async function clearLocalData(profile) {
   });
   if (response !== 0) return;
   try {
-    await terminalAgent?.disable();
+    await Promise.all([terminalAgent?.disable(), githubProjects?.cancel()]);
     for (const popup of popups) if (!popup.isDestroyed()) popup.close();
     siteContents()?.stop();
     await profile.clearStorageData();
@@ -236,6 +240,7 @@ function createMenu(profile) {
       submenu: [
         { label: 'صفحهٔ اصلی Arena', accelerator: 'Alt+Home', click: () => void loadHome() },
         { label: 'بازکردن در مرورگر', click: () => void openInBrowser() },
+        { label: 'پروژه‌های GitHub', accelerator: 'CmdOrCtrl+Shift+G', click: () => perform('github') },
         { label: 'ترمینال AI (آزمایشی)', accelerator: 'CmdOrCtrl+Shift+T', click: () => perform('terminal') },
         { type: 'separator' },
         { label: 'پاک‌کردن داده‌های محلی…', click: () => void clearLocalData(profile) },
@@ -277,7 +282,7 @@ function createMenu(profile) {
           if (mainWindow) void dialog.showMessageBox(mainWindow, {
             type: 'info', title: 'دربارهٔ Arena Desktop',
             message: `Arena Desktop ${app.getVersion()}`,
-            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود. پل آزمایشی PowerShell مجوز یک‌بارهٔ جلسه برای اجرای خودکار و مجوز مستقل ارسال خروجی دارد؛ پیش‌فرض هر دو خاموش است. موارد علامت‌خورده نیازمند بررسی دستی‌اند؛ تشخیص خطر ناقص و پوشهٔ پروژه sandbox نیست. این پل ابزار رسمی Agent نیست و امکانات سمت سرور حساب را باز نمی‌کند.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
+            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود. پل آزمایشی PowerShell مجوز یک‌بارهٔ جلسه برای اجرای خودکار و مجوز مستقل ارسال خروجی دارد؛ پیش‌فرض هر دو خاموش است. موارد علامت‌خورده نیازمند بررسی دستی‌اند؛ تشخیص خطر ناقص و پوشهٔ پروژه sandbox نیست. این پل ابزار رسمی Agent نیست و امکانات سمت سرور حساب را باز نمی‌کند. پنل GitHub برای دانلود/انتشار/دریافت خودکار به نصب جداگانهٔ Git و GitHub CLI نیاز دارد؛ اتصال مخزن خصوصی در خود Arena مستقل است.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
             icon: ICON,
           });
         } },
@@ -304,8 +309,15 @@ function perform(action) {
     case 'menu': applicationMenu?.popup({ window: mainWindow }); break;
     case 'terminal':
       terminalOpen = !terminalOpen;
+      githubOpen = false;
       layoutSite?.();
-      publish({ terminalOpen });
+      publish({ terminalOpen, githubOpen });
+      break;
+    case 'github':
+      githubOpen = !githubOpen;
+      terminalOpen = false;
+      layoutSite?.();
+      publish({ terminalOpen, githubOpen });
       break;
     default: throw new Error('Unsupported action');
   }
@@ -316,7 +328,8 @@ function createWindow(profile) {
   const stateFile = path.join(app.getPath('userData'), 'window-state.json');
   const bounds = readWindowState(stateFile, workArea);
   terminalOpen = false;
-  state = { ready: false, loading: true, canGoBack: false, canGoForward: false, origin: 'arena.ai', error: null, terminalOpen: false };
+  githubOpen = false;
+  state = { ready: false, loading: true, canGoBack: false, canGoForward: false, origin: 'arena.ai', error: null, terminalOpen: false, githubOpen: false };
   const win = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
@@ -349,7 +362,7 @@ function createWindow(profile) {
   const resize = () => {
     if (win.isDestroyed()) return;
     const [width, height] = win.getContentSize();
-    const panelWidth = terminalOpen ? Math.min(420, Math.floor(width * 0.6)) : 0;
+    const panelWidth = terminalOpen || githubOpen ? Math.min(420, Math.floor(width * 0.6)) : 0;
     view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width: width - panelWidth, height: Math.max(0, height - TOOLBAR_HEIGHT) });
   };
   layoutSite = resize;
@@ -363,11 +376,23 @@ function createWindow(profile) {
       if (!terminalOpen && ((snapshot.status === 'review' && (!snapshot.autoExecute || snapshot.reviewReasons.length))
         || (snapshot.status === 'result' && (!snapshot.autoShare || snapshot.reviewReasons.length)))) {
         terminalOpen = true;
+        githubOpen = false;
         layoutSite?.();
-        publish({ terminalOpen });
+        publish({ terminalOpen, githubOpen });
       }
       if (!mainWindow.webContents.isLoadingMainFrame()) {
         mainWindow.webContents.send('arena:terminal-state-changed', snapshot);
+      }
+    },
+  });
+  githubProjects = new GitHubProjects({
+    getWindow: () => mainWindow, getSiteUrl: () => siteContents()?.getURL() || '', dialog,
+    isTerminalActive: () => Boolean(terminalAgent?.session || terminalAgent?.busy),
+    onProject: (project) => terminalAgent?.attachProject(project),
+    onHandoff: (message, guard) => terminalAgent.sendProjectMessage(message, guard),
+    onUpdate: (snapshot) => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()) {
+        mainWindow.webContents.send('arena:github-state-changed', snapshot);
       }
     },
   });
@@ -376,7 +401,7 @@ function createWindow(profile) {
 
   view.webContents.on('did-start-loading', () => publish({ loading: true, error: null }));
   view.webContents.on('did-start-navigation', (details) => {
-    if (details.isMainFrame && !details.isSameDocument) terminalAgent?.onDocumentChange();
+    if (details.isMainFrame && !details.isSameDocument) { terminalAgent?.onDocumentChange(); githubProjects?.onDocumentChange(); }
   });
   // Show challenge/login pages as soon as their DOM is ready. Do not conceal them
   // behind a spinner while waiting for every third-party resource to finish.
@@ -389,6 +414,7 @@ function createWindow(profile) {
   view.webContents.on('did-stop-loading', () => publish({ loading: false }));
   const navigated = () => {
     terminalAgent?.onNavigation(view.webContents.getURL());
+    githubProjects?.onNavigation(view.webContents.getURL());
     publish();
   };
   view.webContents.on('did-navigate', navigated);
@@ -396,11 +422,13 @@ function createWindow(profile) {
   view.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
     if (isMainFrame && code !== -3) {
       terminalAgent?.onDocumentChange('ارتباط صفحه قطع شد؛ اتصال ترمینال و مجوزهای خودکار باطل شدند.');
+      githubProjects?.onDocumentChange();
       fail(code, description);
     }
   });
   view.webContents.on('render-process-gone', () => {
     terminalAgent?.pause('صفحه بسته شد؛ اتصال ترمینال متوقف شد.');
+    githubProjects?.onDocumentChange();
     fail('RENDERER', 'صفحه به‌طور غیرمنتظره بسته شد. دوباره بارگذاری کنید.');
   });
   view.webContents.on('context-menu', (_event, params) => {
@@ -418,14 +446,15 @@ function createWindow(profile) {
   let finishingTerminal = false;
   let allowClose = false;
   win.on('close', (event) => {
-    if (!allowClose && terminalAgent?.busy) {
+    if (!allowClose && (terminalAgent?.busy || githubProjects?.busy)) {
       event.preventDefault();
       if (!finishingTerminal) {
         finishingTerminal = true;
-        void terminalAgent.disable().then(async (snapshot) => {
-          if (snapshot.stopWarning && !win.isDestroyed()) {
+        void Promise.all([terminalAgent.disable(), githubProjects.cancel()]).then(async ([snapshot, github]) => {
+          const stopWarning = snapshot.stopWarning || github?.stopWarning;
+          if (stopWarning && !win.isDestroyed()) {
             const result = await dialog.showMessageBox(win, {
-              type: 'warning', title: 'توقف فرایند تأیید نشد', message: snapshot.stopWarning,
+              type: 'warning', title: 'توقف فرایند تأیید نشد', message: stopWarning,
               detail: 'ممکن است فرمان یا فرایندهای جداشده هنوز فعال باشند. Task Manager را بررسی کنید؛ بستن برنامه تغییرات را برنمی‌گرداند.',
               buttons: ['بازگشت به برنامه', 'بستن برنامه'], defaultId: 0, cancelId: 0, noLink: true,
             });
@@ -438,12 +467,16 @@ function createWindow(profile) {
       return;
     }
     void terminalAgent?.disable();
+    void githubProjects?.cancel();
     const normalBounds = win.getNormalBounds();
     saveWindowState(stateFile, { width: normalBounds.width, height: normalBounds.height, maximized: win.isMaximized() });
   });
   win.on('closed', () => {
     void terminalAgent?.disable();
     terminalAgent = null;
+    const closingGitHub = githubProjects;
+    githubProjects = null;
+    void closingGitHub?.cancel().finally(() => closingGitHub.dispose());
     layoutSite = null;
     for (const popup of popups) if (!popup.isDestroyed()) popup.destroy();
     if (!view.webContents.isDestroyed()) view.webContents.close({ waitForBeforeUnload: false });
@@ -455,7 +488,7 @@ function createWindow(profile) {
     if (app.commandLine?.hasSwitch('arena-self-test')) {
       // Read-only packaged-app diagnostic: exercise the real sandboxed preload
       // and exact-file IPC checks. Never enable a session or run a command here.
-      const check = 'window.arenaDesktop.getTerminalState().then(s => s.status === "off" && s.session === null && s.pending === null && s.autoExecute === false && s.autoShare === false && s.expiresAt === null && s.supported === true && typeof window.arenaDesktop.terminal === "function")';
+      const check = 'Promise.all([window.arenaDesktop.getTerminalState(), window.arenaDesktop.getGitHubState()]).then(([s, g]) => g.checked === false && g.repositories.length === 0 && g.branches.length === 0 && g.preview === null && g.watching === false && g.account === null && g.project === null && g.busy === false && typeof window.arenaDesktop.github === "function" && s.status === "off" && s.session === null && s.pending === null && s.autoExecute === false && s.autoShare === false && s.expiresAt === null && s.supported === true && typeof window.arenaDesktop.terminal === "function")';
       void win.webContents.executeJavaScript(check).then((healthy) => {
         console.log(healthy ? 'ARENA_DESKTOP_BRIDGE_SELF_TEST_OK' : 'ARENA_DESKTOP_BRIDGE_SELF_TEST_FAILED');
         app.exit(healthy ? 0 : 1);
@@ -496,7 +529,26 @@ if (!app.requestSingleInstanceLock()) {
     }
     if (payload !== undefined && (!payload || typeof payload !== 'object' || Array.isArray(payload)
       || Buffer.byteLength(JSON.stringify(payload), 'utf8') > 65536)) throw new Error('Invalid terminal payload');
+    if (githubProjects?.busy) throw new Error('ابتدا عملیات GitHub را تمام یا متوقف کنید.');
+    if (['start', 'choose-folder'].includes(action)) void githubProjects?.stopWatch('با انتخاب/اجرای ترمینال محلی، دریافت خودکار GitHub متوقف شد.');
     return terminalAgent?.handle(action, payload);
+  });
+  ipcMain.handle('arena:github-state', (event) => {
+    if (!isTrustedTerminalSender(event, mainWindow?.webContents, SHELL_URL)) throw new Error('Untrusted GitHub sender');
+    return githubProjects?.snapshot();
+  });
+  ipcMain.handle('arena:github', (event, action, payload) => {
+    if (!isTrustedTerminalSender(event, mainWindow?.webContents, SHELL_URL) || !isAllowedGitHubAction(action)) throw new Error('Untrusted GitHub action');
+    if (payload !== undefined && (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || Buffer.byteLength(JSON.stringify(payload), 'utf8') > 16384)) throw new Error('Invalid GitHub payload');
+    const links = { 'install-git': 'https://github.com/git-for-windows/git/releases/latest',
+      'install-gh': 'https://github.com/cli/cli/releases/latest', 'open-device': 'https://github.com/login/device' };
+    if (Object.hasOwn(links, action)) return requestExternal(links[action]).then(() => githubProjects?.snapshot());
+    if (action === 'open-repo') {
+      const url = githubProjects?.snapshot().project?.repo?.url;
+      return (url ? requestExternal(url) : Promise.resolve()).then(() => githubProjects?.snapshot());
+    }
+    return githubProjects?.handle(action, payload);
   });
   ipcMain.handle('arena:action', (event, action) => {
     if (!isTrustedSender(event, mainWindow?.webContents) || !isAllowedAction(action)) {

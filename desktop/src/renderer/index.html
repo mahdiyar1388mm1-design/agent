@@ -8,6 +8,8 @@
   <title>Arena Desktop — غیررسمی</title>
   <link rel="stylesheet" href="shell.css">
   <link rel="stylesheet" href="terminal.css">
+  <link rel="stylesheet" href="github.css">
+  <script src="github.js" defer></script>
   <script src="shell.js" defer></script>
   <script src="terminal.js" defer></script>
 </head>
@@ -37,6 +39,9 @@
     <button class="browser-button" data-action="open-browser" title="بازکردن Arena در مرورگر پیش‌فرض">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg>
       <span>مرورگر</span>
+    </button>
+    <button class="terminal-button github-button" id="github-toggle" data-action="github" title="پروژه‌های GitHub (Ctrl+Shift+G)" aria-label="بازکردن پروژه‌های GitHub">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1-4-2-6-2m12 4v-4c0-1 .2-2-.7-2.8 3-.4 5.7-1.5 5.7-6a4.6 4.6 0 0 0-1.2-3.2 4.3 4.3 0 0 0-.1-3s-1.1-.4-3.4 1.2a12 12 0 0 0-6.2 0C6.8 1.6 5.7 2 5.7 2a4.3 4.3 0 0 0-.1 3A4.6 4.6 0 0 0 4.4 8c0 4.5 2.7 5.6 5.7 6-.9.8-.7 1.8-.7 2.8V21"/></svg><span>GitHub</span>
     </button>
     <button class="terminal-button" id="terminal-toggle" data-action="terminal" title="ترمینال محلی AI — آزمایشی" aria-label="بازکردن ترمینال محلی AI">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 6 6-6 6m8 0h6"/></svg><span>ترمینال AI</span>
@@ -125,6 +130,52 @@
       <button class="primary-button" id="terminal-share" data-terminal="share">ارسال همین خروجی به مدل</button>
     </section>
     <p class="terminal-footer">این پل، ابزار رسمی Agent نیست و محیط ابری Agent را به ویندوز منتقل نمی‌کند. در چت/Agent دارای یک کادر پیام سازگار و درخواست ساختاریافته قابل استفاده است؛ سازگاری همهٔ حالت‌ها تضمین نمی‌شود. قابلیت‌های حساب همچنان متعلق به خود سایت‌اند. تغییر گفتگو، توقف، پایان مهلت و خروج از برنامه مجوزها را باطل می‌کنند. بستن فقط پنل، جلسه را متوقف نمی‌کند.</p>
+  </aside>
+  <aside class="terminal-panel github-panel" id="github-panel" aria-label="مدیریت پروژه‌های GitHub">
+    <div class="terminal-heading"><div><h2>پروژه‌های GitHub</h2><small>GITHUB ↔ LOCAL PROJECT ↔ ARENA AGENT</small></div><button class="icon-button" id="github-close" aria-label="بستن پنل GitHub" title="بستن پنل؛ دریافت فعال قطع نمی‌شود">×</button></div>
+    <p class="terminal-note">مخزن را دانلود کن یا پروژهٔ محلی را منتشر کن، سپس با Agent ادامه بده. دانلود خودکار فقط commitهای pushشده در شاخهٔ انتخابی را می‌گیرد؛ فایل‌های باقی‌مانده در محیط ابری قابل دریافت نیستند.</p>
+    <section class="github-section" aria-labelledby="github-connection-title">
+      <h3 id="github-connection-title">۱ / اتصال حساب</h3>
+      <p id="github-dependencies">Git و GitHub CLI هنوز بررسی نشده‌اند.</p>
+      <p id="github-account">حسابی تأیید نشده است.</p>
+      <div class="terminal-controls"><button class="secondary-button" data-github="check">بررسی اتصال</button><button class="primary-button" data-github="login">ورود در مرورگر</button></div>
+      <div class="github-tool-links"><button data-github="install-git">نصب رسمی Git ↗</button><button data-github="install-gh">نصب رسمی GitHub CLI ↗</button></div>
+      <div id="github-device" class="github-device" hidden><label for="github-device-code">کد یک‌بارمصرف؛ فقط در github.com/login/device</label><input id="github-device-code" readonly dir="ltr" autocomplete="off"><button class="secondary-button" data-github="open-device">بازکردن صفحهٔ ورود GitHub</button></div>
+      <p class="hint">رمز یا توکن را در چت وارد نکن. ورود با gh سیستم انجام می‌شود؛ اعتبارنامه در محل نگهداری خود gh می‌ماند، نه در پیام Agent. Git و gh باید جداگانه نصب باشند.</p>
+    </section>
+    <section class="github-section" aria-labelledby="github-import-title">
+      <h3 id="github-import-title">۲ / انتخاب یا دانلود پروژه</h3>
+      <div class="terminal-controls"><button class="secondary-button" data-github="repositories">مخزن‌های حساب من</button><button class="secondary-button" data-github="choose-project">پروژهٔ محلی / مخزن موجود</button></div>
+      <label class="terminal-label" for="github-repositories">انتخاب از حداکثر ۱۰۰ مخزن حساب</label><select id="github-repositories"><option value="">مخزن را انتخاب کن…</option></select>
+      <label class="terminal-label" for="github-repository">یا آدرس مخزن عمومی، خصوصی یا مشترک</label><input id="github-repository" maxlength="350" dir="ltr" placeholder="owner/repository یا https://github.com/owner/repository" spellcheck="false">
+      <label class="terminal-label" for="github-branch">شاخهٔ دانلود؛ خالی = شاخهٔ پیش‌فرض مخزن</label><input id="github-branch" maxlength="200" dir="ltr" placeholder="main یا arena/…" spellcheck="false">
+      <div class="terminal-controls"><button class="secondary-button" data-github="choose-parent">پوشهٔ والد دانلود</button><button class="primary-button" data-github="clone">دانلود پروژه</button></div><p id="github-parent" class="github-path">پوشهٔ والد انتخاب نشده است.</p>
+      <p class="hint">در زیرپوشهٔ تازه clone می‌شود؛ مقصد موجود جایگزین نمی‌شود. دانلود، نصب یا اجرای خودکار کد نیست. برای شاخهٔ دیگری، آن را هنگام دانلود مشخص کن یا با Git خودت checkout کن.</p>
+    </section>
+    <section class="github-section" id="github-selected-section" hidden>
+      <h3>پروژهٔ انتخاب‌شده</h3><pre id="github-project" class="terminal-pre" dir="ltr"></pre><button class="secondary-button" data-github="open-repo">مشاهدهٔ مخزن در مرورگر ↗</button>
+      <label class="terminal-label" for="github-branches">شاخه‌های همین مخزن؛ شاخهٔ کاری Agent را انتخاب کن</label><select id="github-branches"><option value="">فهرست شاخه‌ها…</option></select>
+      <label class="terminal-label" for="github-target-branch">نام دقیق شاخهٔ Agent</label><input id="github-target-branch" maxlength="200" dir="ltr" placeholder="arena/… یا main" spellcheck="false">
+      <div class="terminal-controls"><button class="secondary-button" data-github="branches">فهرست شاخه‌ها</button><button class="secondary-button" data-github="select-branch">انتخاب و دریافت این شاخه</button></div>
+      <div class="terminal-controls"><button class="secondary-button" data-github="sync">دریافت آخرین تغییرات</button><button class="primary-button" data-github="watch">دریافت خودکار از GitHub</button><button class="secondary-button terminal-stop" data-github="stop-watch">قطع دریافت خودکار</button></div>
+      <p id="github-watch" class="terminal-mode" role="status">دریافت خودکار خاموش است.</p>
+      <p class="hint">فقط fast-forward روی شاخهٔ فعلیِ تمیز. تغییر محلی، واگرایی یا خطا دریافت را متوقف می‌کند؛ reset، stash و force انجام نمی‌شود. هنگام ترمینال AI محلی، دریافت خودکار خاموش می‌شود. بستن فقط پنل آن را خاموش نمی‌کند.</p>
+    </section>
+    <section class="github-section" id="github-publish-section" hidden>
+      <h3>۳ / انتشار پروژهٔ آماده</h3>
+      <label class="terminal-label" for="github-publish-name">نام مخزن جدید؛ فقط برای پروژهٔ بدون origin</label><input id="github-publish-name" maxlength="100" dir="ltr" placeholder="my-project" spellcheck="false">
+      <label class="terminal-label" for="github-commit-message">پیام commit</label><input id="github-commit-message" maxlength="1000" placeholder="Continue project with Arena Desktop">
+      <button class="secondary-button github-spaced" data-github="prepare-publish">آماده‌سازی و پیش‌نمایش انتشار</button>
+      <p class="hint">در صورت نیاز Git محلی ساخته می‌شود و الگوهای متداول اسرار/فایل تولیدشده به info/exclude محلی اضافه می‌شوند؛ .gitignore بازنویسی نمی‌شود. مخزن جدید همیشه خصوصی است. index با stage قبلی پذیرفته نمی‌شود.</p>
+      <div id="github-preview" hidden><p id="github-preview-summary"></p><pre class="terminal-pre" id="github-preview-files" dir="ltr"></pre><p class="github-warning">کل تاریخچهٔ موجود ممکن است با push ارسال شود. تشخیص اسرار ناقص است؛ فایل‌ها و تاریخچه را بررسی کن. انتشار می‌تواند stage و commit بدون امضا بسازد؛ خطا/توقف آن را rollback نمی‌کند.</p><button class="primary-button" data-github="publish">بررسی نهایی و انتشار در GitHub</button></div>
+    </section>
+    <section class="github-section" id="github-agent-section" hidden>
+      <h3>۴ / ادامهٔ کار با Agent</h3>
+      <label class="terminal-label" for="github-task">از Agent چه کاری می‌خواهی؟</label><textarea id="github-task" maxlength="4000" rows="4" placeholder="مثلاً: پروژه را بررسی کن، صفحهٔ تنظیمات را کامل کن و نتیجه را در همین شاخه commit و push کن."></textarea>
+      <button class="primary-button github-spaced" data-github="handoff">ارسال پروژه و درخواست به Agent</button>
+      <p class="hint">یک گفتگوی آمادهٔ Agent در سایت باز کن. فقط آدرس، شاخه، commit و درخواست فرستاده می‌شوند، نه توکن/فایل محلی. برای مخزن خصوصی، اتصال GitHub و انتخاب مخزن در رابط رسمی خود Arena هم لازم است؛ این دکمه workspace ابری را خودکار عوض نمی‌کند. اگر Arena شاخهٔ کاری اختصاصی ساخت، همان نام شاخه را در این پنل انتخاب کن؛ برنامه شاخه را از متن مدل حدس نمی‌زند. برای کار مستقیم روی فایل‌های محلی از «ترمینال AI» استفاده کن.</p>
+    </section>
+    <div class="github-bottom"><p id="github-message" role="status">آمادهٔ تنظیم اتصال GitHub.</p><p id="github-error" role="alert" hidden></p><button class="secondary-button terminal-stop" data-github="cancel">توقف عملیات و دریافت خودکار</button></div>
   </aside>
 </body>
 </html>

@@ -506,3 +506,38 @@ test('background revocation surfaces an uncertain process stop without restoring
   assert.equal(f.agent.snapshot().autoExecute, false);
   assert.equal(f.messages.length, 1);
 });
+
+test('native project attachment supplies exact repository context without granting terminal permissions', async (t) => {
+  const f = await fixture(t);
+  f.agent.attachProject({ folder: f.cwd, repo: { url: 'https://github.com/owner/ready-project' }, branch: 'arena/work' });
+  assert.equal(f.agent.snapshot().folder, fs.realpathSync(f.cwd));
+  assert.equal(f.agent.snapshot().project.branch, 'arena/work');
+  assert.equal(f.agent.snapshot().autoExecute, false);
+  assert.equal(f.agent.snapshot().autoShare, false);
+  await f.start();
+  assert.match(f.messages[0], /https:\/\/github.com\/owner\/ready-project/);
+  assert.match(f.messages[0], /Exact branch: "arena\/work"/);
+  assert.match(f.messages[0], /never read\/print tokens/);
+  assert.equal(f.calls.length, 0);
+});
+
+test('Agent project handoff is a single guarded message, not a terminal session or execution grant', async (t) => {
+  const f = await fixture(t); let guards = 0;
+  await f.agent.sendProjectMessage('Repository: https://github.com/owner/project\nTask: continue.', () => { guards += 1; });
+  assert.equal(f.messages.length, 1); assert.ok(guards > 1);
+  assert.equal(f.agent.session, null); assert.equal(f.agent.snapshot().autoExecute, false);
+  assert.equal(f.calls.length, 0);
+});
+
+test('Agent handoff preserves a pre-existing user draft and never sends it', async (t) => {
+  const f = await fixture(t); f.data.draft = 'My unsent personal message';
+  await assert.rejects(f.agent.sendProjectMessage('Project context', () => {}));
+  assert.equal(f.data.draft, 'My unsent personal message'); assert.equal(f.messages.length, 0);
+});
+
+test('revocation after project-message preparation prevents clicking Send', async (t) => {
+  const f = await fixture(t); let revoked = false;
+  f.setSiteHook(async (action) => { if (action === 'prepare') revoked = true; });
+  await assert.rejects(f.agent.sendProjectMessage('Project context', () => { if (revoked) throw new Error('revoked'); }), /revoked/);
+  assert.equal(f.messages.length, 0); assert.equal(f.calls.length, 0);
+});

@@ -17,7 +17,7 @@ test('session permissions are independently explicit, immutable, and off by defa
 test('warning heuristics pause recognizable destructive, credential, encoded, elevation and upload requests', () => {
   for (const command of [
     'Remove-Item -Recurse ./project', 'rm ./file', 'format D: /Q', './downloaded.cmd', 'git reset --hard HEAD', 'git clean -fd',
-    'Get-ChildItem Env:', '$env:GITHUB_TOKEN', 'cmd.exe /c remote.exe', 'Get-Content .env', 'Get-Content $HOME/.ssh/id_ed25519', 'Get-Secret MyToken',
+    'gh auth token', 'Get-Content C:/Users/test/.config/gh/hosts.yml', 'git push origin main', 'gh pr merge 7', 'Get-ChildItem Env:', '$env:GITHUB_TOKEN', 'cmd.exe /c remote.exe', 'Get-Content .env', 'Get-Content $HOME/.ssh/id_ed25519', 'Get-Secret MyToken',
     'Set-ExecutionPolicy Unrestricted', 'Start-Process powershell -Verb RunAs',
     'Set-MpPreference -DisableRealtimeMonitoring $true', 'Stop-Process -Name browser',
     'Invoke-Expression $remote', 'iex $script', 'powershell -EncodedCommand abc',

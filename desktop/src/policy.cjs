@@ -4,8 +4,9 @@ const APP_URL = 'https://arena.ai/';
 const APP_DOMAINS = ['arena.ai', 'lmarena.ai'];
 const TERMINAL_HOSTS = new Set(['arena.ai', 'www.arena.ai', 'lmarena.ai', 'www.lmarena.ai']);
 const AUTH_HOSTS = new Set(['accounts.google.com', 'appleid.apple.com']);
-const ACTIONS = new Set(['back', 'forward', 'reload', 'home', 'open-browser', 'menu', 'terminal']);
+const ACTIONS = new Set(['back', 'forward', 'reload', 'home', 'open-browser', 'menu', 'terminal', 'github']);
 const TERMINAL_ACTIONS = new Set(['choose-folder', 'start', 'approve', 'reject', 'share', 'disable']);
+const GITHUB_ACTIONS = new Set(['check', 'login', 'repositories', 'choose-parent', 'clone', 'choose-project', 'branches', 'select-branch', 'sync', 'watch', 'stop-watch', 'prepare-publish', 'publish', 'handoff', 'cancel', 'install-git', 'install-gh', 'open-device', 'open-repo']);
 const MAX_URL_LENGTH = 8192;
 
 function parseUrl(value) {
@@ -86,6 +87,8 @@ function isAllowedTerminalAction(value) {
   return typeof value === 'string' && TERMINAL_ACTIONS.has(value);
 }
 
+function isAllowedGitHubAction(value) { return typeof value === 'string' && GITHUB_ACTIONS.has(value); }
+
 function isTrustedTerminalSender(event, shellContents, shellUrl) {
   return isTrustedSender(event, shellContents) && event.senderFrame.url === shellUrl;
 }
@@ -109,6 +112,7 @@ module.exports = {
   isAllowedAction,
   isTrustedSender,
   isAllowedTerminalAction,
+  isAllowedGitHubAction,
   isTrustedTerminalSender,
   canGrantPermission,
 };

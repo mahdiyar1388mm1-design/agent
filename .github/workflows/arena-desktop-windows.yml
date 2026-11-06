@@ -49,7 +49,7 @@ jobs:
             Write-Output "::error title=Windows packaging failed::$detail"
             exit $result
           }
-      - name: Verify packaged terminal IPC and offline Windows startup
+      - name: Verify packaged terminal/GitHub IPC and offline Windows startup
         shell: pwsh
         run: |
           try {
@@ -68,5 +68,6 @@ jobs:
             desktop/dist/SHA256SUMS.txt
             desktop/dist/README.fa.md
             desktop/dist/TERMINAL.md
+            desktop/dist/GITHUB.md
           if-no-files-found: error
           retention-days: 30
