@@ -7,9 +7,10 @@ const {
 } = require('electron');
 const {
   APP_URL, isAppUrl, isEmbeddedUrl, isSafeExternalUrl, isAllowedPopup,
-  navigationKind, originLabel, isAllowedAction, isTrustedSender, canGrantPermission,
+  navigationKind, originLabel, isAllowedAction, isTrustedSender, canGrantPermission, isAllowedTerminalAction, isTrustedTerminalSender,
 } = require('./policy.cjs');
 const { readWindowState, saveWindowState } = require('./window-state.cjs');
+const { TerminalAgent } = require('./terminal-agent.cjs');
 
 const APP_ID = 'io.github.mahdiyar1388mm1.arena-desktop';
 const PARTITION = 'persist:arena-desktop';
@@ -36,6 +37,9 @@ let mainWindow = null;
 let siteView = null;
 let applicationMenu = null;
 let pendingExternal = false;
+let terminalAgent = null;
+let terminalOpen = false;
+let layoutSite = null;
 const popups = new Set();
 let state = {
   ready: false,
@@ -44,6 +48,7 @@ let state = {
   canGoForward: false,
   origin: 'arena.ai',
   error: null,
+  terminalOpen: false,
 };
 
 function siteContents() {
@@ -206,6 +211,7 @@ async function clearLocalData(profile) {
   });
   if (response !== 0) return;
   try {
+    await terminalAgent?.disable();
     for (const popup of popups) if (!popup.isDestroyed()) popup.close();
     siteContents()?.stop();
     await profile.clearStorageData();
@@ -230,6 +236,7 @@ function createMenu(profile) {
       submenu: [
         { label: 'صفحهٔ اصلی Arena', accelerator: 'Alt+Home', click: () => void loadHome() },
         { label: 'بازکردن در مرورگر', click: () => void openInBrowser() },
+        { label: 'ترمینال AI (آزمایشی)', accelerator: 'CmdOrCtrl+Shift+T', click: () => perform('terminal') },
         { type: 'separator' },
         { label: 'پاک‌کردن داده‌های محلی…', click: () => void clearLocalData(profile) },
         { type: 'separator' },
@@ -270,7 +277,7 @@ function createMenu(profile) {
           if (mainWindow) void dialog.showMessageBox(mainWindow, {
             type: 'info', title: 'دربارهٔ Arena Desktop',
             message: `Arena Desktop ${app.getVersion()}`,
-            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
+            detail: 'نسخهٔ دسکتاپ غیررسمی برای arena.ai؛ وابسته یا مورد تأیید Arena نیست.\n\nبه اینترنت نیاز دارد. دوربین، میکروفون، موقعیت مکانی و ضبط صفحه غیرفعال‌اند. هیچ مدل هوش مصنوعی به‌صورت محلی اجرا نمی‌شود. پل آزمایشی PowerShell فقط با فعال‌سازی و تأیید جداگانهٔ هر فرمان کار می‌کند؛ پوشهٔ پروژه sandbox نیست.\n\nاگر سایت یا سرویس ورود اجازهٔ استفاده در این محیط را ندهد، از گزینهٔ «بازکردن در مرورگر» استفاده کنید. نشست ورود مرورگر با این برنامه جداست.',
             icon: ICON,
           });
         } },
@@ -295,6 +302,11 @@ function perform(action) {
       return state.ready ? contents.reload() : loadHome();
     case 'open-browser': return openInBrowser();
     case 'menu': applicationMenu?.popup({ window: mainWindow }); break;
+    case 'terminal':
+      terminalOpen = !terminalOpen;
+      layoutSite?.();
+      publish({ terminalOpen });
+      break;
     default: throw new Error('Unsupported action');
   }
 }
@@ -303,7 +315,8 @@ function createWindow(profile) {
   const workArea = screen.getPrimaryDisplay().workAreaSize;
   const stateFile = path.join(app.getPath('userData'), 'window-state.json');
   const bounds = readWindowState(stateFile, workArea);
-  state = { ready: false, loading: true, canGoBack: false, canGoForward: false, origin: 'arena.ai', error: null };
+  terminalOpen = false;
+  state = { ready: false, loading: true, canGoBack: false, canGoForward: false, origin: 'arena.ai', error: null, terminalOpen: false };
   const win = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
@@ -336,9 +349,27 @@ function createWindow(profile) {
   const resize = () => {
     if (win.isDestroyed()) return;
     const [width, height] = win.getContentSize();
-    view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width, height: Math.max(0, height - TOOLBAR_HEIGHT) });
+    const panelWidth = terminalOpen ? Math.min(420, Math.floor(width * 0.6)) : 0;
+    view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width: width - panelWidth, height: Math.max(0, height - TOOLBAR_HEIGHT) });
   };
+  layoutSite = resize;
   resize();
+  terminalAgent = new TerminalAgent({
+    getWindow: () => mainWindow,
+    getContents: siteContents,
+    dialog,
+    onUpdate: (snapshot) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (snapshot.status === 'review' && !terminalOpen) {
+        terminalOpen = true;
+        layoutSite?.();
+        publish({ terminalOpen });
+      }
+      if (!mainWindow.webContents.isLoadingMainFrame()) {
+        mainWindow.webContents.send('arena:terminal-state-changed', snapshot);
+      }
+    },
+  });
   win.on('resize', resize);
   guardNavigation(view.webContents);
 
@@ -352,12 +383,19 @@ function createWindow(profile) {
     if (!state.error) publish({ ready: true, loading: false });
   });
   view.webContents.on('did-stop-loading', () => publish({ loading: false }));
-  view.webContents.on('did-navigate', () => publish());
-  view.webContents.on('did-navigate-in-page', () => publish());
+  const navigated = () => {
+    terminalAgent?.onNavigation(view.webContents.getURL());
+    publish();
+  };
+  view.webContents.on('did-navigate', navigated);
+  view.webContents.on('did-navigate-in-page', navigated);
   view.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
     if (isMainFrame && code !== -3) fail(code, description);
   });
-  view.webContents.on('render-process-gone', () => fail('RENDERER', 'صفحه به‌طور غیرمنتظره بسته شد. دوباره بارگذاری کنید.'));
+  view.webContents.on('render-process-gone', () => {
+    terminalAgent?.pause('صفحه بسته شد؛ اتصال ترمینال متوقف شد.');
+    fail('RENDERER', 'صفحه به‌طور غیرمنتظره بسته شد. دوباره بارگذاری کنید.');
+  });
   view.webContents.on('context-menu', (_event, params) => {
     /** @type {import('electron').MenuItemConstructorOptions[]} */
     const items = params.isEditable
@@ -370,11 +408,36 @@ function createWindow(profile) {
     if (bounds.maximized) win.maximize();
     win.show();
   });
-  win.on('close', () => {
+  let finishingTerminal = false;
+  let allowClose = false;
+  win.on('close', (event) => {
+    if (!allowClose && terminalAgent?.busy) {
+      event.preventDefault();
+      if (!finishingTerminal) {
+        finishingTerminal = true;
+        void terminalAgent.disable().then(async (snapshot) => {
+          if (snapshot.stopWarning && !win.isDestroyed()) {
+            const result = await dialog.showMessageBox(win, {
+              type: 'warning', title: 'توقف فرایند تأیید نشد', message: snapshot.stopWarning,
+              detail: 'ممکن است فرمان یا فرایندهای جداشده هنوز فعال باشند. Task Manager را بررسی کنید؛ بستن برنامه تغییرات را برنمی‌گرداند.',
+              buttons: ['بازگشت به برنامه', 'بستن برنامه'], defaultId: 0, cancelId: 0, noLink: true,
+            });
+            if (result.response !== 1) { finishingTerminal = false; return; }
+          }
+          allowClose = true;
+          if (!win.isDestroyed()) win.close();
+        }).catch(() => { finishingTerminal = false; });
+      }
+      return;
+    }
+    void terminalAgent?.disable();
     const normalBounds = win.getNormalBounds();
     saveWindowState(stateFile, { width: normalBounds.width, height: normalBounds.height, maximized: win.isMaximized() });
   });
   win.on('closed', () => {
+    void terminalAgent?.disable();
+    terminalAgent = null;
+    layoutSite = null;
     for (const popup of popups) if (!popup.isDestroyed()) popup.destroy();
     if (!view.webContents.isDestroyed()) view.webContents.close({ waitForBeforeUnload: false });
     siteView = null;
@@ -382,6 +445,19 @@ function createWindow(profile) {
   });
   win.webContents.once('did-finish-load', () => {
     publish();
+    if (app.commandLine?.hasSwitch('arena-self-test')) {
+      // Read-only packaged-app diagnostic: exercise the real sandboxed preload
+      // and exact-file IPC checks. Never enable a session or run a command here.
+      const check = 'window.arenaDesktop.getTerminalState().then(s => s.status === "off" && s.session === null && s.pending === null && s.supported === true && typeof window.arenaDesktop.terminal === "function")';
+      void win.webContents.executeJavaScript(check).then((healthy) => {
+        console.log(healthy ? 'ARENA_DESKTOP_BRIDGE_SELF_TEST_OK' : 'ARENA_DESKTOP_BRIDGE_SELF_TEST_FAILED');
+        app.exit(healthy ? 0 : 1);
+      }).catch((error) => {
+        console.error('ARENA_DESKTOP_BRIDGE_SELF_TEST_FAILED', error.message);
+        app.exit(1);
+      });
+      return;
+    }
     void loadHome();
   });
   void win.loadFile(SHELL_FILE).catch(() => {
@@ -402,6 +478,18 @@ if (!app.requestSingleInstanceLock()) {
   ipcMain.handle('arena:state', (event) => {
     if (!isTrustedSender(event, mainWindow?.webContents)) throw new Error('Untrusted sender');
     return state;
+  });
+  ipcMain.handle('arena:terminal-state', (event) => {
+    if (!isTrustedTerminalSender(event, mainWindow?.webContents, SHELL_URL)) throw new Error('Untrusted terminal sender');
+    return terminalAgent?.snapshot();
+  });
+  ipcMain.handle('arena:terminal', (event, action, payload) => {
+    if (!isTrustedTerminalSender(event, mainWindow?.webContents, SHELL_URL) || !isAllowedTerminalAction(action)) {
+      throw new Error('Untrusted terminal action');
+    }
+    if (payload !== undefined && (!payload || typeof payload !== 'object' || Array.isArray(payload)
+      || Buffer.byteLength(JSON.stringify(payload), 'utf8') > 65536)) throw new Error('Invalid terminal payload');
+    return terminalAgent?.handle(action, payload);
   });
   ipcMain.handle('arena:action', (event, action) => {
     if (!isTrustedSender(event, mainWindow?.webContents) || !isAllowedAction(action)) {

@@ -7,7 +7,9 @@
   <meta name="color-scheme" content="dark">
   <title>Arena Desktop — غیررسمی</title>
   <link rel="stylesheet" href="shell.css">
+  <link rel="stylesheet" href="terminal.css">
   <script src="shell.js" defer></script>
+  <script src="terminal.js" defer></script>
 </head>
 <body>
   <header class="toolbar" aria-label="ابزارهای برنامه">
@@ -35,6 +37,9 @@
     <button class="browser-button" data-action="open-browser" title="بازکردن Arena در مرورگر پیش‌فرض">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg>
       <span>مرورگر</span>
+    </button>
+    <button class="terminal-button" id="terminal-toggle" data-action="terminal" title="ترمینال محلی AI — آزمایشی" aria-label="بازکردن ترمینال محلی AI">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 6 6-6 6m8 0h6"/></svg><span>ترمینال AI</span>
     </button>
     <button class="icon-button menu-button" data-action="menu" title="منو، تنظیمات و راهنما" aria-label="منو، تنظیمات و راهنما">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h14"/></svg>
@@ -73,5 +78,45 @@
       <p>مستقل و غیررسمی؛ وابسته یا مورد تأیید Arena نیست. نیازمند اینترنت است.</p>
     </footer>
   </main>
+  <aside class="terminal-panel" id="terminal-panel" aria-label="پل محلی PowerShell برای مدل‌های Arena">
+    <div class="terminal-heading">
+      <div><h2>ترمینال محلی AI</h2><small>POWERSHELL / EXPERIMENTAL</small></div>
+      <button class="icon-button" id="terminal-close" aria-label="بستن پنل ترمینال" title="بستن پنل؛ جلسهٔ فعال قطع نمی‌شود">×</button>
+    </div>
+    <p class="terminal-note">مدلِ انتخاب‌شده در چت Arena می‌تواند درخواست فرمان بدهد. هر اجرا تأیید جداگانه می‌خواهد. پوشهٔ انتخابی sandbox نیست؛ فرمان می‌تواند به فایل‌ها و شبکهٔ خارج از آن هم دسترسی داشته باشد.</p>
+    <p id="terminal-support" hidden>اجرای PowerShell این نسخه فقط روی Windows پشتیبانی می‌شود.</p>
+    <div class="terminal-folder-row">
+      <button class="secondary-button" id="terminal-choose" data-terminal="choose-folder">انتخاب پوشه</button>
+      <span class="terminal-folder" id="terminal-folder">هنوز پوشه‌ای انتخاب نشده است</span>
+    </div>
+    <label class="terminal-label" for="terminal-task">درخواست تو از مدل انتخاب‌شده</label>
+    <textarea id="terminal-task" maxlength="4000" rows="3" placeholder="مثلاً: فایل‌های این پروژه را بررسی کن و بگو چطور اجرا می‌شود."></textarea>
+    <div class="terminal-controls">
+      <button class="primary-button" id="terminal-start" data-terminal="start" disabled>ارسال درخواست و شروع</button>
+      <button class="secondary-button terminal-stop" id="terminal-disable" data-terminal="disable" disabled>توقف و قطع اتصال</button>
+    </div>
+    <div class="terminal-status-row"><span id="terminal-status" role="status">غیرفعال</span><span id="terminal-step">جلسه‌ای فعال نیست</span></div>
+    <p id="terminal-message" role="status">یک گفتگوی تک‌مدلی در Arena باز کنید و پوشهٔ پروژه را انتخاب کنید.</p>
+    <p id="terminal-error" role="alert" hidden></p>
+    <section class="terminal-block" id="terminal-pending" hidden>
+      <h3>فرمانِ تشخیص‌داده‌شده در صفحه</h3>
+      <p class="hint" id="terminal-reason"></p>
+      <pre class="terminal-pre" id="terminal-command" dir="ltr"></pre>
+      <p class="hint">توضیح متن صفحه تضمین ایمنی نیست. فرمان کامل را بخوانید؛ هیچ فرمانی هنوز اجرا نشده است.</p>
+      <div class="terminal-controls">
+        <button class="primary-button" id="terminal-approve" data-terminal="approve">بررسی نهایی و اجرا</button>
+        <button class="secondary-button" id="terminal-reject" data-terminal="reject">رد درخواست</button>
+      </div>
+    </section>
+    <section class="terminal-block" id="terminal-result" hidden>
+      <h3>خروجی محلی؛ هنوز ارسال نشده</h3>
+      <pre class="terminal-pre" id="terminal-output" dir="ltr"></pre>
+      <label class="terminal-label" for="terminal-share-text">متنی که به Arena و مدل انتخابی فرستاده می‌شود</label>
+      <textarea id="terminal-share-text" maxlength="12000" rows="7" dir="ltr" spellcheck="false"></textarea>
+      <p class="hint">حذف خودکار بعضی الگوهای رمز فقط کمکی است و همهٔ اسرار را تشخیص نمی‌دهد. متن را بازبینی و بخش‌های حساس را حذف کنید؛ با زدن دکمهٔ زیر این متن از سیستم شما خارج می‌شود.</p>
+      <button class="primary-button" id="terminal-share" data-terminal="share">ارسال همین خروجی به مدل</button>
+    </section>
+    <p class="terminal-footer">اتصال رسمی Arena نیست؛ چت تک‌مدلی و تشخیص کادر ارسال لازم است. تغییر سایت یا پاسخ ناسازگار مدل ممکن است اتصال را متوقف کند. ترمینال پس از بازکردن دوبارهٔ برنامه همیشه غیرفعال است. با انتخاب پوشه، مدل خودکار به همهٔ فایل‌ها دسترسی نمی‌گیرد؛ دسترسی فایل فقط از فرمان تأییدشده حاصل می‌شود.</p>
+  </aside>
 </body>
 </html>

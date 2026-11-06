@@ -49,7 +49,7 @@ jobs:
             Write-Output "::error title=Windows packaging failed::$detail"
             exit $result
           }
-      - name: Launch the real packaged app offline on Windows
+      - name: Verify packaged terminal IPC and offline Windows startup
         shell: pwsh
         run: |
           try {
@@ -67,5 +67,6 @@ jobs:
             desktop/dist/*.exe
             desktop/dist/SHA256SUMS.txt
             desktop/dist/README.fa.md
+            desktop/dist/TERMINAL.md
           if-no-files-found: error
           retention-days: 30

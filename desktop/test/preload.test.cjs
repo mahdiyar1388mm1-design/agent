@@ -25,7 +25,7 @@ function loadBridge() {
 
 test('preload exposes only a frozen, narrowly scoped API', () => {
   const { bridge } = loadBridge();
-  assert.deepEqual(Object.keys(bridge).sort(), ['getState', 'onState', 'perform']);
+  assert.deepEqual(Object.keys(bridge).sort(), ['getState', 'getTerminalState', 'onState', 'onTerminalState', 'perform', 'terminal']);
   assert.equal(Object.isFrozen(bridge), true);
   assert.equal(bridge.send, undefined);
   assert.equal(bridge.invoke, undefined);
@@ -55,4 +55,23 @@ test('state subscriptions strip IPC events and support cleanup', () => {
   assert.equal(results.length, 1);
   assert.equal(ipc.listenerCount('arena:state-changed'), 0);
   assert.throws(() => bridge.onState(null), /callback/);
+});
+
+
+test('terminal bridge exposes only gated actions, never an exec/spawn primitive', async () => {
+  const { bridge, calls, ipc } = loadBridge();
+  await bridge.getTerminalState();
+  await bridge.terminal('approve', { session: 'example-session', seq: 1 });
+  assert.equal(calls[0][0], 'arena:terminal-state');
+  assert.equal(calls[1][0], 'arena:terminal');
+  assert.equal(calls[1][1], 'approve');
+  for (const action of ['exec', 'spawn', 'run', 'powershell', 'set-cwd', '__proto__']) {
+    await assert.rejects(bridge.terminal(action, {}), /Unsupported terminal action/);
+  }
+  const results = [];
+  const unsubscribe = bridge.onTerminalState((...args) => results.push(args));
+  ipc.emit('arena:terminal-state-changed', { mustNotLeak: true }, { status: 'review' });
+  assert.deepEqual(results, [[{ status: 'review' }]]);
+  unsubscribe();
+  assert.equal(ipc.listenerCount('arena:terminal-state-changed'), 0);
 });

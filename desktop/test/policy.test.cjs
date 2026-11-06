@@ -95,3 +95,30 @@ test('sensitive device permissions are denied, including inside untrusted iframe
   assert.equal(policy.canGrantPermission('clipboard-sanitized-write', 'https://arena.ai/', false), false);
   assert.equal(policy.canGrantPermission('fullscreen', 'https://accounts.google.com/'), false);
 });
+
+
+test('terminal IPC additionally requires the exact local shell URL, not merely a trusted web origin', () => {
+  const frame = { url: 'file:///app/src/renderer/index.html' };
+  const shell = { mainFrame: frame, isDestroyed: () => false };
+  const event = { sender: shell, senderFrame: frame };
+  assert.equal(policy.isTrustedTerminalSender(event, shell, frame.url), true);
+  assert.equal(policy.isTrustedTerminalSender(event, shell, 'https://arena.ai'), false);
+  frame.url = 'https://arena.ai';
+  assert.equal(policy.isTrustedTerminalSender(event, shell, 'file:///app/src/renderer/index.html'), false);
+  for (const action of ['choose-folder', 'start', 'approve', 'reject', 'share', 'disable']) {
+    assert.equal(policy.isAllowedTerminalAction(action), true);
+  }
+  for (const action of ['exec', 'run', 'spawn', 'set-cwd', null, {}]) {
+    assert.equal(policy.isAllowedTerminalAction(action), false);
+  }
+});
+
+
+test('terminal DOM adapter never runs on OAuth hosts or arbitrary Arena subdomains', () => {
+  for (const url of ['https://arena.ai/c/test', 'https://www.lmarena.ai/']) {
+    assert.equal(policy.isTerminalSiteUrl(url), true);
+  }
+  for (const url of ['https://auth.arena.ai/', 'https://accounts.google.com/', 'https://evil.arena.ai/', 'http://arena.ai/', 'https://arena.ai:8443/']) {
+    assert.equal(policy.isTerminalSiteUrl(url), false, url);
+  }
+});

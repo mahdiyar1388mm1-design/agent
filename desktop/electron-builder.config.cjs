@@ -18,6 +18,7 @@ module.exports = {
     'assets/icon.ico',
     'assets/icon.svg',
     'README.md',
+    'TERMINAL.md',
     'package.json',
   ],
   electronFuses: {

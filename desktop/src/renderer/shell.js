@@ -20,6 +20,7 @@
 
   function render(state) {
     lastState = state;
+    document.body?.classList.toggle('terminal-open', Boolean(state.terminalOpen));
     byId('origin').textContent = state.origin || 'arena.ai';
     byId('back').disabled = !state.canGoBack;
     byId('forward').disabled = !state.canGoForward;

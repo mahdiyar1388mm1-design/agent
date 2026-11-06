@@ -10,6 +10,21 @@ $process = $null
 try {
     New-Item -Path $profile -ItemType Directory -Force | Out-Null
     $env:APPDATA = $profile
+    $stdout = Join-Path $profile 'bridge-check.stdout'
+    $stderr = Join-Path $profile 'bridge-check.stderr'
+    $process = Start-Process -FilePath (Resolve-Path $executable).Path `
+        -ArgumentList '--arena-self-test' -RedirectStandardOutput $stdout `
+        -RedirectStandardError $stderr -PassThru
+    if (-not $process.WaitForExit(15000)) {
+        throw 'Packaged preload/terminal IPC diagnostic timed out.'
+    }
+    $process.WaitForExit()
+    $report = Get-Content $stdout -Raw -ErrorAction SilentlyContinue
+    if ($process.ExitCode -ne 0 -or $report -notlike '*ARENA_DESKTOP_BRIDGE_SELF_TEST_OK*') {
+        $detail = Get-Content $stderr -Raw -ErrorAction SilentlyContinue
+        throw "Packaged preload/terminal IPC diagnostic failed: $report $detail"
+    }
+    Write-Host 'Packaged terminal bridge IPC passed; terminal is disabled by default.'
     $process = Start-Process -FilePath (Resolve-Path $executable).Path `
         -ArgumentList '--host-resolver-rules="MAP * ~NOTFOUND"' -PassThru
     if ($process.WaitForExit(12000)) {

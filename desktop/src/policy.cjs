@@ -2,8 +2,10 @@
 
 const APP_URL = 'https://arena.ai/';
 const APP_DOMAINS = ['arena.ai', 'lmarena.ai'];
+const TERMINAL_HOSTS = new Set(['arena.ai', 'www.arena.ai', 'lmarena.ai', 'www.lmarena.ai']);
 const AUTH_HOSTS = new Set(['accounts.google.com', 'appleid.apple.com']);
-const ACTIONS = new Set(['back', 'forward', 'reload', 'home', 'open-browser', 'menu']);
+const ACTIONS = new Set(['back', 'forward', 'reload', 'home', 'open-browser', 'menu', 'terminal']);
+const TERMINAL_ACTIONS = new Set(['choose-folder', 'start', 'approve', 'reject', 'share', 'disable']);
 const MAX_URL_LENGTH = 8192;
 
 function parseUrl(value) {
@@ -26,6 +28,11 @@ function isAppUrl(value) {
   return isSecureWebUrl(url) && APP_DOMAINS.some(
     (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`),
   );
+}
+
+function isTerminalSiteUrl(value) {
+  const url = parseUrl(value);
+  return isSecureWebUrl(url) && TERMINAL_HOSTS.has(url.hostname);
 }
 
 function isAuthUrl(value) {
@@ -75,6 +82,14 @@ function isTrustedSender(event, shellContents) {
   );
 }
 
+function isAllowedTerminalAction(value) {
+  return typeof value === 'string' && TERMINAL_ACTIONS.has(value);
+}
+
+function isTrustedTerminalSender(event, shellContents, shellUrl) {
+  return isTrustedSender(event, shellContents) && event.senderFrame.url === shellUrl;
+}
+
 function canGrantPermission(permission, requestingUrl, isMainFrame = true) {
   return isMainFrame && isAppUrl(requestingUrl)
     && ['clipboard-sanitized-write', 'fullscreen'].includes(permission);
@@ -84,6 +99,7 @@ module.exports = {
   APP_URL,
   parseUrl,
   isAppUrl,
+  isTerminalSiteUrl,
   isAuthUrl,
   isEmbeddedUrl,
   isSafeExternalUrl,
@@ -92,5 +108,7 @@ module.exports = {
   originLabel,
   isAllowedAction,
   isTrustedSender,
+  isAllowedTerminalAction,
+  isTrustedTerminalSender,
   canGrantPermission,
 };

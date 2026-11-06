@@ -65,6 +65,7 @@ async function setup(t, { lock = true } = {}) {
     setTitle(title) { this.title = title; }
     async loadFile(file) {
       this.webContents.url = pathToFileURL(file).href;
+      this.webContents.mainFrame.url = this.webContents.url;
       this.webContents.emit('did-finish-load');
       this.emit('ready-to-show');
     }
@@ -107,6 +108,7 @@ async function setup(t, { lock = true } = {}) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/main.cjs'), 'utf8'), {
     __dirname: path.join(__dirname, '../src'),
     URL,
+    Buffer,
     process: { platform: 'win32' },
     require: (name) => name === 'electron' ? electron : name.startsWith('./') ? require(`../src/${name.slice(2)}`) : require(name),
   });
@@ -234,4 +236,19 @@ test('a second instance exits without creating another browser profile or window
   const app = await setup(t, { lock: false });
   assert.equal(app.quit(), true);
   assert.equal(app.windows.length, 0);
+});
+
+
+test('terminal IPC is unreachable from the remote site, subframes and wrong local URLs', async (t) => {
+  const app = await setup(t);
+  const read = app.handlers.get('arena:terminal-state');
+  const action = app.handlers.get('arena:terminal');
+  assert.throws(() => read({ sender: app.view.webContents, senderFrame: app.view.webContents.mainFrame }), /Untrusted/);
+  assert.throws(() => read({ sender: app.window.webContents, senderFrame: { url: app.window.webContents.url } }), /Untrusted/);
+  const event = { sender: app.window.webContents, senderFrame: app.window.webContents.mainFrame };
+  assert.equal(read(event).status, 'off');
+  assert.throws(() => action(event, 'exec', { command: 'MUST NOT EXECUTE' }), /Untrusted/);
+  assert.throws(() => action(event, 'start', 'not an object'), /Invalid terminal payload/);
+  app.window.webContents.mainFrame.url = 'https://arena.ai';
+  assert.throws(() => action(event, 'choose-folder'), /Untrusted/);
 });
