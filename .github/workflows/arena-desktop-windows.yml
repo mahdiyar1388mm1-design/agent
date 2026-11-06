@@ -41,7 +41,10 @@ jobs:
           & npm.cmd run dist:win 2>&1 | Tee-Object -FilePath package.log
           $result = $LASTEXITCODE
           if ($result -ne 0) {
-            $detail = (Get-Content package.log -Tail 80) -join "`n"
+            $detail = (Get-Content package.log -Tail 25) -join "`n"
+            # GitHub annotations are truncated at 4 KB; retain the final error,
+            # not the earlier passing-test output.
+            if ($detail.Length -gt 3000) { $detail = $detail.Substring($detail.Length - 3000) }
             $detail = $detail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
             Write-Output "::error title=Windows packaging failed::$detail"
             exit $result
