@@ -84,7 +84,7 @@ test('installed Git can invoke the fixed gh credential helper with an offline FA
   if (!dependencies.git || !dependencies.gh) { t.skip('Installed Git/gh are required only for this native helper test'); return; }
   // No real token, user config, login, API call or credential persistence.
   const result = await tools.git(['credential', 'fill'], directory, { timeoutMs: 10000, input: 'protocol=https\nhost=github.com\n\n' });
-  assert.equal(result.code, 0, result.error || result.stderr);
+  assert.equal(result.code, 0, JSON.stringify({ error: result.error, stderr: result.stderr, dependencies }));
   assert.ok(result.stdout.includes(`password=${token}`));
   assert.match(result.stdout, /username=/);
 });

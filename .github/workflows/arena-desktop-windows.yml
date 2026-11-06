@@ -41,6 +41,17 @@ jobs:
           & npm.cmd run dist:win 2>&1 | Tee-Object -FilePath package.log
           $result = $LASTEXITCODE
           if ($result -ne 0) {
+            # Preserve the FIRST real test failure, not just cascading cancelled tests.
+            $all = Get-Content package.log
+            $summary = ($all | Select-String -Pattern 'failing tests:' | Select-Object -Last 1)
+            if ($summary) {
+              $failure = ($all | Select-Object -Skip ($summary.LineNumber - 1)) -join "`n"
+              for ($offset = 0; $offset -lt [Math]::Min($failure.Length, 18000); $offset += 2500) {
+                $piece = $failure.Substring($offset, [Math]::Min(2500, $failure.Length - $offset))
+                $piece = $piece.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+                Write-Output "::error title=Windows test failure detail::$piece"
+              }
+            }
             $detail = (Get-Content package.log -Tail 25) -join "`n"
             # GitHub annotations are truncated at 4 KB; retain the final error,
             # not the earlier passing-test output.
