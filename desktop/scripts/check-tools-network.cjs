@@ -12,6 +12,9 @@ async function checkPublicGit(resourcesPath) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-public-git-check-'));
   const tools = new GitHubTools({ resourcesPath, cwd: root, env: { ...process.env,
     GH_CONFIG_DIR: path.join(root, 'empty-config'), GH_TOKEN: '', GITHUB_TOKEN: '', GH_ENTERPRISE_TOKEN: '', GITHUB_ENTERPRISE_TOKEN: '' } });
+  for (const key of Object.keys(tools.env)) if (key.toLowerCase() === 'path') delete tools.env[key];
+  tools.env.PATH = path.win32.join(tools.env.SystemRoot || 'C:\\Windows', 'System32');
+  tools.env.HOME = root; tools.env.USERPROFILE = root; tools.env.XDG_CONFIG_HOME = path.join(root, 'xdg');
   try {
     await tools.detect(); assert.equal(tools.sources.git, 'bundled');
     let result;

@@ -68,6 +68,11 @@ async function checkTools(resourcesPath) {
   const tools = new GitHubTools({ resourcesPath, cwd: root, env: { ...process.env,
     GH_CONFIG_DIR: path.join(root, 'config'), GH_TOKEN: token, GITHUB_TOKEN: token,
     HTTPS_PROXY: 'http://127.0.0.1:1', HTTP_PROXY: 'http://127.0.0.1:1', ALL_PROXY: 'http://127.0.0.1:1', NO_PROXY: '' } });
+  // Do not let CI's installed Git/gh/sh or global Git config mask a missing
+  // bundled dependency. Only Windows system tools remain in the base PATH.
+  for (const key of Object.keys(tools.env)) if (key.toLowerCase() === 'path') delete tools.env[key];
+  tools.env.PATH = path.win32.join(tools.env.SystemRoot || 'C:\\Windows', 'System32');
+  tools.env.HOME = root; tools.env.USERPROFILE = root; tools.env.XDG_CONFIG_HOME = path.join(root, 'xdg');
   try {
     const found = await tools.detect();
     assert.ok(found.git && found.gh); assert.equal(tools.sources.git, 'bundled'); assert.equal(tools.sources.gh, 'bundled');
