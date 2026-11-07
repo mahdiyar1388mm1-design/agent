@@ -1,0 +1,69 @@
+name: Orbit Agent / Windows
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'workbench/**'
+      - 'desktop/src/**'
+      - 'desktop/assets/portable-tools.json'
+      - 'desktop/scripts/prepare-tools.cjs'
+      - '.github/workflows/orbit-agent-windows.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Build and verify Orbit Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            workbench/package-lock.json
+      - name: Install pinned build dependencies
+        run: |
+          npm --prefix desktop ci --no-audit --no-fund
+          npm --prefix workbench ci --no-audit --no-fund
+      - name: Test and build installer
+        working-directory: workbench
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          & npm.cmd run dist:win 2>&1 | Tee-Object -FilePath package.log
+          $result = $LASTEXITCODE
+          if ($result -ne 0) {
+            $detail = (Get-Content package.log -Tail 65) -join "`n"
+            for ($offset = 0; $offset -lt [Math]::Min($detail.Length, 15000); $offset += 2800) {
+              $piece = $detail.Substring($offset, [Math]::Min(2800, $detail.Length - $offset)).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+              Write-Output "::error title=Orbit build detail::$piece"
+            }
+            exit $result
+          }
+      - name: Verify actual packaged Windows tools and Chrome delegation
+        working-directory: workbench
+        shell: pwsh
+        run: |
+          try { ./scripts/smoke-windows.ps1 } catch {
+            $detail = $_.ToString().Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::error title=Orbit native check failed::$detail"
+            exit 1
+          }
+      - name: Upload EXE, checksum and documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-Agent-Windows-x64
+          path: |
+            workbench/dist/*.exe
+            workbench/dist/SHA256SUMS.txt
+            workbench/dist/README.fa.md
+            workbench/dist/THIRD-PARTY.md
+            workbench/dist/GITHUB.md
+          if-no-files-found: error
+          retention-days: 30

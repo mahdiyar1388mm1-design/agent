@@ -1,0 +1,21 @@
+{
+  "name": "orbit-agent-workbench",
+  "productName": "Orbit Agent",
+  "version": "0.1.0",
+  "description": "A local Windows agent workbench with Dahl orchestration, Arena browser delegation and approved local tools.",
+  "author": "mahdiyar1388mm1-design",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "src/main.cjs",
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/check.cjs",
+    "test": "node --test test/*.test.cjs",
+    "tools:prepare": "node ../desktop/scripts/prepare-tools.cjs",
+    "dist:win": "npm run check && npm test && npm run tools:prepare && electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never && node scripts/verify.cjs"
+  },
+  "dependencies": { "@modelcontextprotocol/sdk": "1.32.2", "playwright-core": "1.65.0" },
+  "devDependencies": { "@electron/asar": "3.4.1", "@electron/fuses": "1.8.0", "electron": "45.2.3", "electron-builder": "26.18.0", "jsdom": "26.1.0", "resedit": "3.1.0" },
+  "overrides": { "minimatch@>=7 <11.0.1": "11.0.5" }
+}

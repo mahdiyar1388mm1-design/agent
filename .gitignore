@@ -8,3 +8,6 @@ artifacts/
 
 # Verified portable tools are prepared during packaging, never committed.
 desktop/build/
+
+# Orbit generated build staging
+workbench/build/
