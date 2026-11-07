@@ -12,7 +12,7 @@ async function run({ window, resourcesPath, getState }) {
   assert.equal(getState().github.account, null);
   const navigation = await window.webContents.executeJavaScript(`(async () => { await document.fonts.ready; document.querySelector('.main-nav [data-view=agents]').click(); const agents = document.querySelector('[data-page=agents]').hidden === false && document.querySelectorAll('.agent-card').length === 3; document.getElementById('command-open').click(); const palette = !document.getElementById('command-palette').hidden; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); document.querySelector('.main-nav [data-view=home]').click(); return { agents, palette, font: document.fonts.check('12px Vazirmatn') }; })()`);
   assert.deepEqual(navigation, { agents: true, palette: true, font: true });
-  await window.webContents.executeJavaScript(`window.orbit.perform('copy-text', { text: 'ORBIT_NATIVE_CLIPBOARD_FIXTURE' })`); assert.equal(clipboard.readText(), 'ORBIT_NATIVE_CLIPBOARD_FIXTURE'); clipboard.clear();
+  await window.webContents.executeJavaScript(`window.orbit.perform('copy-text', { text: 'ORBIT_NATIVE_CLIPBOARD_FIXTURE' })`); assert.equal(await clipboard.readText(), 'ORBIT_NATIVE_CLIPBOARD_FIXTURE'); clipboard.clear();
   require('@modelcontextprotocol/sdk/client/index.js'); require('playwright-core');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orbit-native-')); const token = 'ghp_' + 'f'.repeat(36);
   const env = { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token, GH_CONFIG_DIR: path.join(root, 'gh-config'), HOME: root, USERPROFILE: root, XDG_CONFIG_HOME: path.join(root, 'xdg'), HTTP_PROXY: 'http://127.0.0.1:1', HTTPS_PROXY: 'http://127.0.0.1:1', ALL_PROXY: 'http://127.0.0.1:1' };

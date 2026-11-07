@@ -19,6 +19,7 @@ async function run() {
     await page.keyboard.press('Control+k'); assert.equal(await page.locator('#command-palette').isVisible(), true); await page.locator('#command-search').fill('نصب Skill'); await page.keyboard.press('Enter'); assert.equal(await page.locator('#drawer').isVisible(), true); assert.equal(await page.locator('[data-drawer="extensions"]').isVisible(), true); await page.keyboard.press('Escape');
     await page.locator('.main-nav [data-view="home"]').click(); await page.locator('.template-card').first().click(); assert.match(await page.locator('#task').inputValue(), /Arena/); assert.equal(await page.locator('[data-page="mission"]').isVisible(), true);
     await page.locator('#send').click(); assert.equal(await page.locator('#messages .message').count(), 0, 'Website preview must never fabricate execution');
+    await page.locator('#toast').waitFor({ state: 'hidden' }); await page.locator('#task').fill('');
     for (const size of [{ width: 980, height: 740 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(size); await page.locator('.main-nav [data-view="home"]').click(); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `Horizontal overflow at ${size.width}`);
       if (size.width === 390) await page.screenshot({ path: path.join(screenshots, 'command-center-mobile.png'), animations: 'disabled' });

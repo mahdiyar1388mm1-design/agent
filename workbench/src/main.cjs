@@ -38,7 +38,7 @@ async function action(name, payload) {
   if (name === 'stop') { await engine.stop(); publish(); return state(); }
   if (['project-list', 'project-read'].includes(name)) return new ProjectView({ workspace: () => workspace, clean: (text) => vault.clean(text) }).handle(name, payload);
   if (name === 'project-open') { const folder = workspace.resolve('.'); const error = await shell.openPath(folder); if (error) throw new Error('بازکردن پوشه در Explorer انجام نشد.'); return { opened: true }; }
-  if (name === 'copy-text') { if (typeof payload?.text !== 'string' || payload.text.length > 32000) throw new Error('متن قابل کپی نیست.'); clipboard.writeText(vault.clean(payload.text)); return { copied: true }; }
+  if (name === 'copy-text') { if (typeof payload?.text !== 'string' || payload.text.length > 32000) throw new Error('متن قابل کپی نیست.'); await clipboard.writeText(vault.clean(payload.text)); return { copied: true }; }
   if (name === 'github-device') { if (!github.state.deviceCode) throw new Error('کد ورود فعالی وجود ندارد.'); await shell.openExternal('https://github.com/login/device'); return state(); }
   if (engine.promise || setupBusy || github.busy) throw new Error('ابتدا کار/ورود جاری را متوقف یا کامل کنید.');
   switch (name) {
