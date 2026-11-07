@@ -9,6 +9,7 @@ async function verify() {
   const exe = path.join(unpacked, 'Orbit Agent.exe'); const pe = fs.readFileSync(exe); assert.equal(pe.toString('ascii', 0, 2), 'MZ'); assert.equal(pe.readUInt16LE(pe.readUInt32LE(0x3c) + 4), 0x8664);
   assert.equal(JSON.parse(asar.extractFile(archive, 'package.json')).version, pkg.version);
   for (const relative of files(path.join(root, 'src'), 'src')) assert.deepEqual(asar.extractFile(archive, path.normalize(relative)), fs.readFileSync(path.join(root, relative)), 'Stale packed file: ' + relative);
+  for (const relative of files(path.join(root, 'assets'), 'assets')) assert.deepEqual(asar.extractFile(archive, path.normalize(relative)), fs.readFileSync(path.join(root, relative)), 'Stale packed asset: ' + relative);
   for (const file of require('../electron-builder.config.cjs').files.find((e) => typeof e === 'object' && e.to === 'src/shared').filter) assert.deepEqual(asar.extractFile(archive, path.normalize('src/shared/' + file)), fs.readFileSync(path.join(root, '../desktop/src', file)));
   const prepared = path.join(root, '../desktop/build/portable-tools/tools'); const target = path.join(unpacked, 'resources/tools');
   assert.deepEqual(files(prepared).sort(), files(target).sort()); for (const file of files(prepared)) assert.equal(await hash(path.join(prepared, file)), await hash(path.join(target, file)), 'Bundled tool mismatch: ' + file);

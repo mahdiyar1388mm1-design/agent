@@ -1,7 +1,7 @@
 {
   "name": "orbit-agent-workbench",
   "productName": "Orbit Agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A local Windows agent workbench with Dahl orchestration, Arena browser delegation and approved local tools.",
   "author": "mahdiyar1388mm1-design",
   "private": true,
@@ -10,6 +10,8 @@
   "engines": { "node": ">=22.12.0" },
   "scripts": {
     "start": "electron .",
+    "preview": "node scripts/preview.cjs",
+    "test:ui": "node scripts/ui-smoke.cjs",
     "check": "node scripts/check.cjs",
     "test": "node --test test/*.test.cjs",
     "tools:prepare": "node ../desktop/scripts/prepare-tools.cjs",

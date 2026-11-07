@@ -1,31 +1,942 @@
 <!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Orbit Agent</title><link rel="icon" href="../../assets/icon.png"><link rel="stylesheet" href="app.css"><script src="app.js" defer></script></head>
-<body>
-<div class="app">
- <nav class="rail" aria-label="ناوبری"><img src="../../assets/icon.png" alt="Orbit" class="rail-logo"><button class="rail-button selected" data-panel="home" title="فضای کار">⌂</button><button class="rail-button" data-panel="activity" title="فعالیت عامل">≋</button><button class="rail-button" data-panel="extensions" title="Skill و Plugin">◇</button><span class="rail-spacer"></span><button class="rail-button" data-panel="settings" title="تنظیمات امن">⚙</button><div class="avatar">M</div></nav>
- <aside class="sidebar"><header class="brand"><span>Orbit<span class="brand-dot">.</span></span><small>AGENT WORKSPACE</small></header>
- <button class="new-task" id="new-task"><span>＋</span> کار جدید <kbd>Ctrl N</kbd></button>
- <div class="section-label"><span>WORKSPACE</span><span>⌘</span></div>
- <button class="project-card" id="choose-project"><span class="folder-symbol">▱</span><span><strong id="project-name">انتخاب پروژه</strong><small id="project-subtitle">یک پوشه از کامپیوترت</small></span><span class="project-arrow">⌄</span></button>
- <div class="sidebar-section"><div class="section-label"><span>RECENT TASKS</span><span id="task-count">۰</span></div><div id="history" class="history"><p class="muted">اولین کار را از همین‌جا شروع کن.</p></div></div>
- <div class="connected"><div class="section-label">YOUR TOOLS</div><button data-panel="browser"><span class="tool-icon mint">◉</span><span>Arena & Chrome</span><i id="chrome-dot"></i></button><button data-panel="github"><span class="tool-icon blue">⑂</span><span>GitHub</span><i id="github-dot"></i></button><button data-panel="extensions"><span class="tool-icon mauve">◇</span><span>Skills & Plugins</span><small id="extension-count">0</small></button></div>
- <button class="sidebar-footer" data-panel="settings"><span class="status-orb"></span><span>LOCAL FIRST<small id="version">Orbit Agent · 0.1</small></span><span>⚙</span></button></aside>
- <main class="main"><header class="topbar"><div class="breadcrumb"><span class="orbital-small">◎</span><span id="breadcrumb">Personal workspace</span><span class="crumb-divider">/</span><strong id="crumb-task">New task</strong></div><div class="mode-switch" role="group" aria-label="حالت"><button data-mode="chat">گفتگو</button><button data-mode="work" class="active">اجرای کار <span>✦</span></button></div><div class="topbar-end"><span class="private-label">▣ <span>روی سیستم شما</span></span><button id="activity-toggle" class="plain-button" title="نمایش فعالیت‌ها">≋</button></div></header>
- <div id="demo-banner" class="banner" hidden>پیش‌نمایش رابط — ابزارها و ورود کلید فقط داخل نسخهٔ Windows فعال‌اند.</div>
- <section class="conversation" id="conversation" aria-live="polite"><div class="hero" id="hero"><div class="hero-mark">◎<span>✦</span></div><p class="eyebrow">A LITTLE DIRECTION. A LOT DONE.</p><h1>چه کاری را با هم پیش ببریم؟</h1><p class="hero-description">تو مقصد را بگو.<br>عامل‌ها با Arena، ابزارها و پروژه‌ات کار را جلو می‌برند.</p><div class="suggestions"><button data-suggestion="پروژهٔ انتخاب‌شده را بررسی کن، با Arena دربارهٔ معماری آن مشورت کن و یک برنامهٔ بهبود قابل‌آزمون پیشنهاد بده."><span>▱</span><strong>پروژه‌ام را بررسی کن</strong><small>فایل‌ها، معماری و قدم بعد</small><b>↗</b></button><button data-suggestion="با استفاده از Arena دربارهٔ درخواست من تحقیق کن؛ منابع قابل بررسی بیاور و نتیجه را داخل پروژه به‌صورت Markdown ذخیره کن."><span>◎</span><strong>با Arena هم‌فکری کن</strong><small>یک عامل، چند ابزار و مدل</small><b>↗</b></button><button data-suggestion="مخزن GitHub موردنظر من را بررسی کن. قبل از هر تغییر، مخزن و شاخه را از من بپرس و سپس روی نسخهٔ محلی کار کن."><span>⑂</span><strong>روی GitHub ادامه بده</strong><small>از مخزن تا نسخهٔ قابل اجرا</small><b>↗</b></button></div></div><div class="messages" id="messages"></div></section>
- <section class="composer-area"><div id="job-status" class="job-status"><span class="pulse"></span><span id="job-status-text">آمادهٔ یک کار تازه</span><button id="stop" class="stop-button" hidden>■ توقف فوری</button></div><form class="composer" id="task-form"><label class="sr-only" for="task">درخواست شما</label><textarea id="task" rows="2" maxlength="12000" placeholder="یک کار واقعی بسپار؛ مثلاً با Arena مشورت کن و پروژه‌ام را اصلاح کن…"></textarea><div class="composer-bottom"><div class="composer-left"><button type="button" class="attach" id="attach-project" title="انتخاب پوشه">＋</button><span id="permission-label" class="permission-label">♧ مجوز برای همین کار</span></div><div class="composer-right"><label class="sr-only" for="model">مدل عامل</label><select id="model"><option value="team">تیم سه‌مدلی</option><option value="zai-org/GLM-5.3-Flash">GLM 5.3 Flash</option><option value="deepseek-ai/DeepSeek-V4-Flash-0731">DeepSeek V4 Flash</option><option value="MiniMaxAI/MiniMax-M2.7">MiniMax M2.7</option></select><button class="send" id="send" type="submit" title="شروع کار">↑</button></div></div></form><div class="under-composer"><div class="tool-chips"><span>◎ Arena</span><span>▱ Files</span><span>⌁ Terminal</span><span>⑂ GitHub</span><button data-panel="extensions">＋ ابزارها</button></div><small id="usage">کلیدها فقط در دستگاه شما نگهداری می‌شوند.</small></div><p class="safety-note">عامل ممکن است اشتباه کند. ترمینال و افزونه‌ها sandbox نیستند؛ کارهای حساس اجازهٔ جداگانه می‌خواهند.</p></section>
- </main>
- <aside class="activity-panel" id="activity-panel" hidden><header><div><small>LIVE ACTIVITY</small><h2>پشت صحنهٔ کار</h2></div><button id="close-activity" class="plain-button">×</button></header><div class="agent-team"><span>G<small>برنامه‌ریز</small></span><i>···</i><span>D<small>مجری</small></span><i>···</i><span>M<small>بازبین</small></span></div><div id="activity-list" class="activity-list"><p class="muted">کار که شروع شود، فراخوانی مدل‌ها و نتیجهٔ واقعی ابزارها اینجا دیده می‌شود.</p></div></aside>
-</div>
-<div id="drawer-backdrop" class="drawer-backdrop" hidden></div><aside id="drawer" class="drawer" hidden><header><div><small>WORKSPACE SETTINGS</small><h2 id="drawer-title">تنظیمات</h2></div><button id="close-drawer" class="plain-button">×</button></header>
- <section data-drawer="settings"><div class="info-card"><span class="tag">DAHL INFERENCE</span><h3>کلیدها، فقط پیش خودت</h3><p>کلیدها به مدل، Arena، افزونه یا گزارش فعالیت داده نمی‌شوند. اگر کلیدی را در چت فرستاده‌ای، آن را عوض کن و کلید تازه را اینجا وارد کن.</p><div class="endpoint">inference.dahl.global / v1</div></div><label class="field-label" for="api-keys">کلیدها؛ هر کدام در یک خط</label><textarea class="secret-input" id="api-keys" rows="5" autocomplete="off" spellcheck="false" placeholder="کلید تازه را فقط در برنامه وارد کن"></textarea><label class="check"><input type="checkbox" id="remember"> نگهداری رمز‌شده با حفاظت حساب Windows</label><button id="save-keys" class="primary">ذخیرهٔ امن کلیدها</button><p id="keys-status" class="help"></p><button id="reset-keys" class="secondary">بررسی دوبارهٔ سهمیهٔ کلیدها</button><div class="callout">جابه‌جایی فقط وقتی سرویس صریحاً پایان سهمیهٔ کلید را اعلام کند. خطای عمومی 429 باعث تعویض کلید یا دورزدن محدودیت سرعت نمی‌شود.</div></section>
- <section data-drawer="browser" hidden><div class="info-card"><span class="tag">MANAGED CHROME</span><h3>Arena، یک ابزار برای عامل</h3><p>ورود را یک‌بار در Chrome جداگانهٔ عامل انجام بده و گفتگوی تک‌مدلی یا Agent و مخزن مجاز را انتخاب کن. پروفایل شخصی Chrome تو خوانده یا کپی نمی‌شود.</p></div><button id="browser-login" class="primary">بازکردن Chrome و ورود به Arena ↗</button><button id="browser-close" class="secondary">بستن مرورگر عامل</button><p id="browser-status" class="help"></p><div class="callout">بعد به Orbit برگرد و کار را بسپار. عامل برای کار، همان پروفایل را در پس‌زمینه باز می‌کند. رمز، MFA و CAPTCHA با خودت است. تغییر ساختار Arena می‌تواند اتوماسیون را متوقف کند؛ اتصال رسمی مخزن داخل Arena جداست.</div></section>
- <section data-drawer="github" hidden><div class="info-card"><span class="tag">GITHUB CONNECTION</span><h3>مخزن واقعی. کار واقعی.</h3><p>Git و gh همراه برنامه‌اند؛ هیچ حساب یا اعتبارنامهٔ سازنده‌ای همراه آن نیست. ورود GitHub محلی و ورود مخزن در Arena دو اتصال جدا هستند.</p></div><div class="button-row"><button id="github-check" class="primary">بررسی اتصال</button><button id="github-login" class="secondary">ورود در مرورگر</button></div><div id="device-box" class="device-box" hidden><label>کد یک‌بارمصرف، فقط برای github.com</label><input id="device-code" readonly><button id="github-device" class="secondary">بازکردن صفحهٔ تأیید ↗</button></div><pre id="github-status" class="help"></pre><div id="publish-preview"></div><div class="callout">دانلود عمومی بدون ورود هم ممکن است. انتشار با پیش‌نمایش و اجازهٔ بومی انجام می‌شود؛ مخزن جدید خصوصی است. reset، force-push و merge خودکار نداریم.</div></section>
- <section data-drawer="extensions" hidden><div class="info-card"><span class="tag">EXTEND YOUR AGENT</span><h3>روش کار خودت را اضافه کن</h3><p><b>Skill</b> راهنمای متنی Markdown یا JSON است. <b>Plugin</b> یک سرور MCP استاندارد stdio با manifest محلی است؛ نصب برنامه‌نویسی‌شده با دسترسی واقعی سیستم، فقط از منبع مورداعتماد.</p></div><button id="install-extension" class="primary">＋ نصب Skill یا Plugin محلی</button><div id="extensions-list" class="extensions-list"></div><details><summary>قالب manifest افزونه</summary><pre class="example">{
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Orbit — اتاق فرمان عامل‌ها</title>
+    <link rel="icon" href="../../assets/icon.png" />
+    <link rel="stylesheet" href="app.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <svg
+      class="svg-library"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <symbol id="i-grid" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="2" />
+          <rect x="14" y="3" width="7" height="7" rx="2" />
+          <rect x="3" y="14" width="7" height="7" rx="2" />
+          <rect x="14" y="14" width="7" height="7" rx="2" />
+        </symbol>
+        <symbol id="i-orbit" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <ellipse
+            cx="12"
+            cy="12"
+            rx="11"
+            ry="5"
+            transform="rotate(-40 12 12)"
+          />
+          <path d="M7 3a10 10 0 0 1 14 12M3 9a10 10 0 0 0 14 12" />
+        </symbol>
+        <symbol id="i-board" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <path
+            d="M9 3v18m6-18v18M5.5 8h1M11.5 8h1M17.5 8h1M5.5 12h1M11.5 12h1"
+          />
+        </symbol>
+        <symbol id="i-agents" viewBox="0 0 24 24">
+          <rect x="5" y="7" width="14" height="13" rx="4" />
+          <path d="M12 3v4m-1-4h2M2 12v4m20-4v4M9 16h6" />
+          <circle cx="9" cy="12" r=".6" />
+          <circle cx="15" cy="12" r=".6" />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24">
+          <path
+            d="M3 7a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"
+          />
+        </symbol>
+        <symbol id="i-tools" viewBox="0 0 24 24">
+          <path d="M14 6V3H9v3H6v5H3v5h3v5h5v-3h5v3h5v-5h-3v-5h3V6Z" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24">
+          <path d="M19 12H5m6-6-6 6 6 6" />
+        </symbol>
+        <symbol id="i-up" viewBox="0 0 24 24">
+          <path d="M12 19V5m-6 6 6-6 6 6" />
+        </symbol>
+        <symbol id="i-external" viewBox="0 0 24 24">
+          <path
+            d="M14 3h7v7m0-7L10 14m0-10H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-5"
+          />
+        </symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <ellipse cx="12" cy="12" rx="4" ry="9" />
+          <path d="M3 12h18M5 7h14M5 17h14" />
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 24 24">
+          <path
+            d="M9 20c-4 1-4-2-6-2m12 4v-4a3 3 0 0 0-.8-2.4c3-.3 5.8-1.4 5.8-6.4A5 5 0 0 0 18.7 6c.2-1 .2-2-.2-3 0 0-1.1-.3-3.5 1a12 12 0 0 0-6 0C6.6 2.7 5.5 3 5.5 3c-.4 1-.4 2-.2 3A5 5 0 0 0 4 9.2c0 5 2.8 6.1 5.8 6.4A3 3 0 0 0 9 18v4"
+          />
+        </symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="16" rx="3" />
+          <path d="m7 9 3 3-3 3m6 0h4" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 24 24">
+          <path
+            d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8m-8 4h5"
+          />
+        </symbol>
+        <symbol id="i-spark" viewBox="0 0 24 24">
+          <path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z" />
+        </symbol>
+        <symbol id="i-code" viewBox="0 0 24 24">
+          <path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="m5 12 4 4L19 6" />
+        </symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24">
+          <path d="M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z" />
+          <path d="m8 12 3 3 5-6" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path
+            d="m10 3-1 3-3 1-2-1-2 4 2 2v2l-2 2 2 4 3-1 2 1 1 2h4l1-2 2-1 3 1 2-4-2-2v-2l2-2-2-4-3 1-2-1-1-3Z"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="i-key" viewBox="0 0 24 24">
+          <circle cx="8" cy="9" r="5" />
+          <path d="m12 13 9 9m-5-5 3-3m-6 0 3-3" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+          <path d="m6 6 12 12M6 18 18 6" />
+        </symbol>
+        <symbol id="i-activity" viewBox="0 0 24 24">
+          <path d="M2 12h5l3-8 4 16 3-8h5" />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+          <rect x="8" y="8" width="13" height="13" rx="2" />
+          <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24">
+          <path
+            d="M21 8v5h-5M3 16v-5h5M5 7a8 8 0 0 1 13-2l3 3M3 16l3 3a8 8 0 0 0 13-2"
+          />
+        </symbol>
+        <symbol id="i-help" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4m0 3h.01" />
+        </symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24">
+          <path d="m9 5 7 7-7 7" />
+        </symbol>
+        <symbol id="i-stop" viewBox="0 0 24 24">
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="app">
+      <aside class="sidebar">
+        <button class="brand" data-view="home" aria-label="خانهٔ Orbit">
+          <span class="brand-mark"
+            ><svg class="icon"><use href="#i-orbit" /></svg></span
+          ><span class="brand-name"
+            >orbit<span class="brand-dot">.</span
+            ><small>AGENT WORKSPACE</small></span
+          ><span class="version-badge">02</span>
+        </button>
+        <button class="new-task" id="new-task">
+          <svg class="icon"><use href="#i-plus" /></svg><span>مأموریت جدید</span
+          ><kbd>Ctrl N</kbd>
+        </button>
+        <div class="nav-label">فضای کار</div>
+        <nav class="main-nav" aria-label="بخش‌های فضای کار">
+          <button data-view="home" class="nav-item active">
+            <svg class="icon"><use href="#i-grid" /></svg><span>اتاق فرمان</span
+            ><i class="nav-active-dot"></i>
+          </button>
+          <button data-view="missions" class="nav-item">
+            <svg class="icon"><use href="#i-board" /></svg
+            ><span>مأموریت‌ها</span
+            ><span class="nav-count" id="task-count">۰</span>
+          </button>
+          <button data-view="agents" class="nav-item">
+            <svg class="icon"><use href="#i-agents" /></svg
+            ><span>تیم عامل‌ها</span><span class="nav-count">۳</span>
+          </button>
+          <button data-view="workspace" class="nav-item">
+            <svg class="icon"><use href="#i-folder" /></svg
+            ><span>فایل‌های پروژه</span>
+          </button>
+          <button data-view="tools" class="nav-item">
+            <svg class="icon"><use href="#i-tools" /></svg
+            ><span>ابزارها و افزونه‌ها</span
+            ><span class="nav-count" id="extension-count">۰</span>
+          </button>
+        </nav>
+        <div class="sidebar-project">
+          <div class="nav-label">پروژهٔ متصل <span>LOCAL</span></div>
+          <button id="choose-project" class="project-card">
+            <span class="project-icon"
+              ><svg class="icon"><use href="#i-folder" /></svg></span
+            ><span class="project-copy"
+              ><strong id="project-name">انتخاب پوشهٔ پروژه</strong
+              ><small id="project-subtitle"
+                >فایل‌ها روی سیستم خودت می‌مانند</small
+              ></span
+            ><svg class="icon tiny"><use href="#i-plus" /></svg>
+          </button>
+        </div>
+        <div class="sidebar-history">
+          <div class="nav-label">اخیر <span>این اجرا</span></div>
+          <div id="history" class="history"></div>
+        </div>
+        <div class="sidebar-bottom">
+          <div class="connection-mini">
+            <span class="status-light" id="model-light"></span
+            ><span id="model-connection">مدل‌ها تنظیم نشده‌اند</span
+            ><button
+              data-panel="settings"
+              class="icon-button"
+              title="تنظیم اتصال مدل"
+            >
+              <svg class="icon"><use href="#i-settings" /></svg>
+            </button>
+          </div>
+          <button class="profile" data-panel="help">
+            <span class="avatar">م</span
+            ><span
+              >فضای شخصی<small id="version">Orbit Agent · 0.2.0</small></span
+            ><svg class="icon"><use href="#i-help" /></svg>
+          </button>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div class="breadcrumb">
+            <svg class="icon"><use href="#i-grid" /></svg
+            ><span id="breadcrumb">فضای کار شخصی</span
+            ><span class="slash">/</span
+            ><strong id="view-title">اتاق فرمان</strong>
+          </div>
+          <div class="top-actions">
+            <span class="runtime-badge" id="runtime-badge"
+              ><i></i><span>LOCAL WORKSPACE</span></span
+            ><button
+              id="command-open"
+              class="command-trigger"
+              title="جستجوی فرمان‌ها"
+            >
+              <svg class="icon"><use href="#i-search" /></svg
+              ><span>فرمان سریع</span><kbd>Ctrl K</kbd></button
+            ><button
+              class="icon-button"
+              data-panel="settings"
+              title="تنظیمات امن"
+            >
+              <svg class="icon"><use href="#i-settings" /></svg></button
+            ><button
+              class="icon-button"
+              id="activity-toggle"
+              title="مشاهدهٔ پشت صحنه"
+              aria-expanded="false"
+            >
+              <svg class="icon"><use href="#i-activity" /></svg></button
+            ><button id="stop" class="stop-button" hidden>
+              <svg class="icon"><use href="#i-stop" /></svg>توقف کار
+            </button>
+          </div>
+        </header>
+        <div id="demo-banner" class="preview-banner" hidden>
+          <svg class="icon"><use href="#i-shield" /></svg
+          ><span
+            >پیش‌نمایش محیط — اجرای ابزارها و ورود کلید فقط در برنامهٔ Windows
+            فعال است.</span
+          ><button data-panel="help">
+            این محیط چطور کار می‌کند؟ <span>↗</span>
+          </button>
+        </div>
+        <div class="workspace-shell" id="workspace-shell">
+          <div class="main-column">
+            <div class="stage" id="stage">
+              <section class="view home-view" data-page="home">
+                <div class="page-eyebrow">
+                  <span class="eyebrow-dot"></span> YOUR NEXT BIG THING STARTS
+                  HERE <span class="edition">ORBIT / 02</span>
+                </div>
+                <div class="hero">
+                  <div class="hero-copy">
+                    <div class="hero-tag">
+                      <svg class="icon"><use href="#i-spark" /></svg> ایده از
+                      تو. حرکت با تیم تو.
+                    </div>
+                    <h1>یک فرمان.<br /><span>یک تیم کنارت.</span></h1>
+                    <p>
+                      از تحقیق و طراحی تا کد، مرورگر و GitHub.<br />کار را
+                      بسپار، مسیر اجرا را ببین و کنترل را دست خودت نگه دار.
+                    </p>
+                    <div class="hero-actions">
+                      <button class="primary" id="hero-start">
+                        یک مأموریت بسپار
+                        <svg class="icon"><use href="#i-arrow" /></svg></button
+                      ><button class="text-button" data-view="agents">
+                        با تیم آشنا شو
+                        <svg class="icon"><use href="#i-chevron" /></svg>
+                      </button>
+                    </div>
+                    <div class="hero-proof">
+                      <span class="mini-avatars"><b>G</b><b>D</b><b>M</b></span
+                      ><span>سه نقش واقعی، یک جریان کار ترتیبی</span
+                      ><svg class="icon"><use href="#i-shield" /></svg>
+                    </div>
+                  </div>
+                  <div
+                    class="orbit-visual"
+                    aria-label="جریان کار: معمار، سازنده و بازبین"
+                  >
+                    <div class="visual-grid"></div>
+                    <div class="orbital-ring ring-one"></div>
+                    <div class="orbital-ring ring-two"></div>
+                    <div class="orbital-ring ring-three"></div>
+                    <div class="orbit-core">
+                      <svg class="icon"><use href="#i-orbit" /></svg
+                      ><span>ORBIT</span>
+                    </div>
+                    <div class="orbit-node node-one">
+                      <span class="node-icon violet">G</span>
+                      <div><strong>معمار</strong><small>GLM 5.3</small></div>
+                      <span class="node-dot"></span>
+                    </div>
+                    <div class="orbit-node node-two">
+                      <span class="node-icon blue">D</span>
+                      <div>
+                        <strong>سازنده</strong><small>DeepSeek V4</small>
+                      </div>
+                      <span class="node-dot"></span>
+                    </div>
+                    <div class="orbit-node node-three">
+                      <span class="node-icon lime">M</span>
+                      <div>
+                        <strong>بازبین</strong><small>MiniMax M2.7</small>
+                      </div>
+                      <span class="node-dot"></span>
+                    </div>
+                    <div class="visual-caption">
+                      <span></span> PLAN <i>→</i> BUILD <i>→</i> REVIEW
+                    </div>
+                    <span class="orbit-star star-one">✦</span
+                    ><span class="orbit-star star-two">+</span>
+                  </div>
+                </div>
+                <div class="metrics" id="metrics"></div>
+                <div class="home-bottom">
+                  <div class="playbooks">
+                    <div class="section-heading">
+                      <div>
+                        <span class="eyebrow">MAKE SOMETHING HAPPEN</span>
+                        <h2>از یک ایده شروع کن</h2>
+                      </div>
+                      <span class="subtle-badge">قالب‌های شروع</span>
+                    </div>
+                    <div class="template-grid" id="templates"></div>
+                  </div>
+                  <aside class="readiness">
+                    <div class="section-heading">
+                      <div>
+                        <span class="eyebrow">READY WHEN YOU ARE</span>
+                        <h2>آماده‌سازی فضای کار</h2>
+                      </div>
+                      <span class="readiness-count" id="readiness-count"
+                        >۰/۴</span
+                      >
+                    </div>
+                    <div id="readiness-list"></div>
+                    <div class="readiness-note">
+                      <svg class="icon"><use href="#i-shield" /></svg
+                      ><span
+                        >ورود به حساب و اجازهٔ کارهای حساس با خودت است. تنظیم
+                        کلید، تأیید اتصال زنده نیست.</span
+                      >
+                    </div>
+                  </aside>
+                </div>
+              </section>
+              <section class="view" data-page="missions" hidden>
+                <div class="page-heading">
+                  <div>
+                    <span class="eyebrow">MISSION CONTROL</span>
+                    <h1>ایده‌ها، در مسیر اجرا.</h1>
+                    <p>
+                      مأموریت‌های همین اجرای برنامه. نتیجهٔ مدل با تأیید موفقیت
+                      ابزار یکی نیست.
+                    </p>
+                  </div>
+                  <button class="secondary compact" data-new>
+                    <svg class="icon"><use href="#i-plus" /></svg>مأموریت جدید
+                  </button>
+                </div>
+                <label class="search-field"
+                  ><svg class="icon"><use href="#i-search" /></svg
+                  ><input
+                    id="mission-search"
+                    placeholder="جستجو در مأموریت‌ها…"
+                    autocomplete="off"
+                /></label>
+                <div class="mission-board" id="mission-board"></div>
+              </section>
+              <section class="view" data-page="agents" hidden>
+                <div class="page-heading">
+                  <div>
+                    <span class="eyebrow">MEET YOUR CREW</span>
+                    <h1>یک تیم، چند زاویهٔ دید.</h1>
+                    <p>
+                      مدل‌ها با نقش‌های متفاوت، پشت یک مأموریت کار می‌کنند؛ نه
+                      اجرای موازیِ پنهان روی فایل‌ها.
+                    </p>
+                  </div>
+                  <span class="outline-tag">۳ مدل DAHL</span>
+                </div>
+                <div class="team-banner">
+                  <span class="team-symbol"
+                    ><svg class="icon"><use href="#i-agents" /></svg
+                  ></span>
+                  <div>
+                    <strong>تیم خودکار Orbit</strong>
+                    <p>
+                      معمار شروع می‌کند، سازنده با ابزارها ادامه می‌دهد و بازبین
+                      شواهد را بررسی می‌کند.
+                    </p>
+                  </div>
+                  <button class="primary compact" id="select-team">
+                    انتخاب تیم <svg class="icon"><use href="#i-arrow" /></svg>
+                  </button>
+                </div>
+                <div class="agent-grid" id="agents-grid"></div>
+                <div class="agent-note">
+                  <svg class="icon"><use href="#i-orbit" /></svg>
+                  <div>
+                    <h3>Arena، همکارِ بیرون از این تیم</h3>
+                    <p>
+                      عامل می‌تواند در مرورگر جداگانه با Arena مشورت کند. ابزار
+                      و مخزن ابری Arena، همان ترمینال و پوشهٔ محلی نیست؛ ورود و
+                      مجوز آن جداست.
+                    </p>
+                  </div>
+                  <button class="secondary compact" data-panel="browser">
+                    راه‌اندازی Arena
+                    <svg class="icon"><use href="#i-external" /></svg>
+                  </button>
+                </div>
+              </section>
+              <section class="view workspace-view" data-page="workspace" hidden>
+                <div class="page-heading">
+                  <div>
+                    <span class="eyebrow">YOUR PROJECT. YOUR MACHINE.</span>
+                    <h1>از گفتگو تا فایل واقعی.</h1>
+                    <p id="workspace-path">
+                      یک پوشهٔ محلی انتخاب کن تا فایل‌های متنی آن را ببینی.
+                    </p>
+                  </div>
+                  <div class="button-row">
+                    <button
+                      class="icon-button bordered"
+                      id="project-refresh"
+                      title="بازخوانی فایل‌های پروژه"
+                    >
+                      <svg class="icon"><use href="#i-refresh" /></svg></button
+                    ><button class="secondary compact" id="project-explorer">
+                      <svg class="icon"><use href="#i-external" /></svg>Explorer
+                    </button>
+                  </div>
+                </div>
+                <div class="file-browser">
+                  <aside class="file-tree">
+                    <header>
+                      <span>PROJECT FILES</span
+                      ><button
+                        id="folder-up"
+                        class="icon-button"
+                        title="پوشهٔ بالاتر"
+                      >
+                        <svg class="icon"><use href="#i-up" /></svg>
+                      </button>
+                    </header>
+                    <div id="folder-path" class="folder-path">/</div>
+                    <div id="file-list" class="file-list"></div>
+                  </aside>
+                  <div class="file-preview">
+                    <header>
+                      <span id="file-name">بدون فایل انتخاب‌شده</span
+                      ><button
+                        id="copy-file"
+                        class="icon-button"
+                        title="کپی متن فایل"
+                        disabled
+                      >
+                        <svg class="icon"><use href="#i-copy" /></svg>
+                      </button>
+                    </header>
+                    <div class="file-placeholder" id="file-placeholder">
+                      <svg class="icon"><use href="#i-file" /></svg>
+                      <h3>پروژه، جلوی چشم تو.</h3>
+                      <p>
+                        فایل را از ستون کناری باز کن.<br />فقط پیش‌نمایش متن
+                        است؛ هیچ کدی اجرا یا به مدل ارسال نمی‌شود.
+                      </p>
+                      <button
+                        class="secondary compact"
+                        data-action="project-choose"
+                      >
+                        انتخاب پوشه
+                      </button>
+                    </div>
+                    <pre id="file-content" hidden></pre>
+                    <footer id="file-footnote">
+                      مسیرهای حساس و پیوندها نمایش داده نمی‌شوند. حداکثر ۱۵۰
+                      ورودی در هر پوشه.
+                    </footer>
+                  </div>
+                </div>
+              </section>
+              <section class="view" data-page="tools" hidden>
+                <div class="page-heading">
+                  <div>
+                    <span class="eyebrow">BUILT TO CONNECT</span>
+                    <h1>ابزار بیشتر. مسیر بازتر.</h1>
+                    <p>
+                      اتصال‌ها، فایل‌ها و افزونه‌های واقعی. وضعیت‌ها از خود
+                      برنامه می‌آیند، نه از انیمیشن.
+                    </p>
+                  </div>
+                  <button class="secondary compact" data-panel="extensions">
+                    <svg class="icon"><use href="#i-plus" /></svg>افزودن Skill /
+                    Plugin
+                  </button>
+                </div>
+                <div class="tools-grid" id="tools-grid"></div>
+                <div class="section-heading installed-heading">
+                  <div>
+                    <span class="eyebrow">YOUR EXTENSIONS</span>
+                    <h2>روش کار خودت را بساز</h2>
+                  </div>
+                  <button class="text-button" data-panel="extensions">
+                    مدیریت افزونه‌ها
+                    <svg class="icon"><use href="#i-chevron" /></svg>
+                  </button>
+                </div>
+                <div id="installed-summary" class="installed-summary"></div>
+                <div class="tools-disclaimer">
+                  <svg class="icon"><use href="#i-shield" /></svg>
+                  <p>
+                    فایل‌های پروژه و خروجی ابزارها می‌توانند برای پردازش به Dahl
+                    بروند. ترمینال و افزونه‌ها با دسترسی واقعی کاربر اجرا
+                    می‌شوند و sandbox نیستند. کنترل حساس با تأیید بومی باقی
+                    می‌ماند.
+                  </p>
+                </div>
+              </section>
+              <section class="view mission-view" data-page="mission" hidden>
+                <div class="mission-header">
+                  <div>
+                    <span class="eyebrow">ONE MISSION. REAL ACTIONS.</span>
+                    <h1 id="crumb-task">مأموریت تازه</h1>
+                  </div>
+                  <button class="secondary compact" id="mission-details">
+                    <svg class="icon"><use href="#i-activity" /></svg>پشت صحنه
+                  </button>
+                </div>
+                <div class="mission-ribbon" id="mission-ribbon"></div>
+                <div id="conversation" class="conversation" aria-live="polite">
+                  <div id="chat-empty" class="chat-empty">
+                    <span class="empty-orbit"
+                      ><svg class="icon"><use href="#i-orbit" /></svg
+                    ></span>
+                    <h2>یک مقصد مشخص کن.</h2>
+                    <p>
+                      عامل ابتدا محیط و ابزارهای مجاز را بررسی می‌کند.<br />دستور،
+                      برنامه و نتیجهٔ واقعی همین‌جا به هم می‌رسند.
+                    </p>
+                  </div>
+                  <div id="messages" class="messages"></div>
+                </div>
+              </section>
+            </div>
+            <section class="composer-area">
+              <div class="composer-meta">
+                <div class="job-status" id="job-status">
+                  <span class="status-light"></span
+                  ><span id="job-status-text">آمادهٔ مأموریت بعدی</span>
+                </div>
+                <div class="mode-switch" role="group" aria-label="حالت">
+                  <button data-mode="work" class="active">
+                    <svg class="icon"><use href="#i-spark" /></svg>اجرای کار</button
+                  ><button data-mode="chat">گفتگو</button>
+                </div>
+              </div>
+              <form id="task-form" class="composer">
+                <label class="sr-only" for="task">درخواست شما به عامل</label
+                ><textarea
+                  id="task"
+                  rows="2"
+                  maxlength="12000"
+                  placeholder="یک کار واقعی بسپار؛ مثلاً با کمک Arena یک وب‌سایت بساز و فایل‌هایش را در پروژه‌ام بنویس…"
+                ></textarea>
+                <div class="composer-bottom">
+                  <div class="composer-controls">
+                    <button
+                      class="icon-button attach"
+                      type="button"
+                      id="attach-project"
+                      title="انتخاب پوشهٔ پروژه"
+                    >
+                      <svg class="icon"><use href="#i-plus" /></svg></button
+                    ><span class="composer-divider"></span
+                    ><label class="sr-only" for="model">عامل یا تیم</label
+                    ><select id="model">
+                      <option value="team">✦ تیم خودکار Orbit</option>
+                      <option value="zai-org/GLM-5.3-Flash">
+                        معمار · GLM 5.3 Flash
+                      </option>
+                      <option value="deepseek-ai/DeepSeek-V4-Flash-0731">
+                        سازنده · DeepSeek V4 Flash
+                      </option>
+                      <option value="MiniMaxAI/MiniMax-M2.7">
+                        بازبین · MiniMax M2.7
+                      </option></select
+                    ><span class="permission-label" id="permission-label"
+                      ><svg class="icon"><use href="#i-shield" /></svg>مجوز برای
+                      همین مأموریت</span
+                    >
+                  </div>
+                  <div class="send-group">
+                    <small id="char-count">Enter ↵</small
+                    ><button
+                      class="send"
+                      type="submit"
+                      id="send"
+                      title="شروع مأموریت"
+                    >
+                      <svg class="icon"><use href="#i-up" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </form>
+              <div class="composer-footer">
+                <div class="tool-chips">
+                  <button data-panel="browser">
+                    <svg class="icon"><use href="#i-globe" /></svg>Arena
+                    <i id="chrome-dot"></i></button
+                  ><span
+                    ><svg class="icon"><use href="#i-terminal" /></svg
+                    >Terminal</span
+                  ><button data-panel="github">
+                    <svg class="icon"><use href="#i-github" /></svg>GitHub
+                    <i id="github-dot"></i></button
+                  ><button data-panel="extensions">
+                    <svg class="icon"><use href="#i-tools" /></svg>Skills
+                  </button>
+                </div>
+                <small id="usage">کنترل نهایی، همیشه با توست.</small>
+              </div>
+            </section>
+          </div>
+          <aside class="activity-panel" id="activity-panel" hidden>
+            <header>
+              <div>
+                <span class="eyebrow">BEHIND THE SCENES</span>
+                <h2>مسیر مأموریت</h2>
+              </div>
+              <button
+                id="close-activity"
+                class="icon-button"
+                title="بستن پشت صحنه"
+              >
+                <svg class="icon"><use href="#i-close" /></svg>
+              </button>
+            </header>
+            <div class="live-agents" id="live-agents"></div>
+            <div
+              class="inspector-tabs"
+              role="tablist"
+              aria-label="نمای پشت صحنه"
+            >
+              <button
+                data-inspector="plan"
+                class="active"
+                role="tab"
+                aria-selected="true"
+              >
+                برنامه</button
+              ><button data-inspector="trace" role="tab" aria-selected="false">
+                رویدادها</button
+              ><button
+                data-inspector="outputs"
+                role="tab"
+                aria-selected="false"
+              >
+                خروجی‌ها <span id="artifact-count">۰</span>
+              </button>
+            </div>
+            <div class="inspector-body">
+              <section data-inspector-page="plan">
+                <div class="plan-source">
+                  <i></i>برنامهٔ گزارش‌شده توسط عامل
+                </div>
+                <div id="plan-list"></div>
+                <p class="inspector-note">
+                  تیکِ برنامه، اثبات اجرا نیست. پاسخ واقعی ابزارها را در
+                  «رویدادها» بررسی کن.
+                </p>
+              </section>
+              <section data-inspector-page="trace" hidden>
+                <div id="tool-runs"></div>
+                <div class="events-label">فعالیت مدل‌ها و سرویس‌ها</div>
+                <div class="activity-list" id="activity-list"></div>
+              </section>
+              <section data-inspector-page="outputs" hidden>
+                <p class="inspector-note">
+                  فقط نوشتن فایل‌هایی که ابزار تأیید کرده است. پیش‌نمایش، محتوای
+                  فعلی فایل را نشان می‌دهد.
+                </p>
+                <div id="artifacts-list"></div>
+              </section>
+            </div>
+            <footer>
+              <svg class="icon"><use href="#i-shield" /></svg>توقف، مراحل بعدی
+              را لغو می‌کند؛ rollback نیست.
+            </footer>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+    <aside
+      id="drawer"
+      class="drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="drawer-title"
+      hidden
+    >
+      <header>
+        <div>
+          <span class="eyebrow">WORKSPACE CONTROL</span>
+          <h2 id="drawer-title">تنظیمات</h2>
+        </div>
+        <button id="close-drawer" class="icon-button" title="بستن تنظیمات">
+          <svg class="icon"><use href="#i-close" /></svg>
+        </button>
+      </header>
+      <section data-drawer="settings">
+        <div class="drawer-intro">
+          <span class="large-tool-icon violet"
+            ><svg class="icon"><use href="#i-key" /></svg
+          ></span>
+          <h3>قدرت مدل‌ها، با کلید خودت.</h3>
+          <p>
+            کلید به متن گفتگو، Arena و محیط افزونه تزریق نمی‌شود. نگهداری
+            رمز‌شده اختیاری است. کد افزونه با دسترسی کاربر اجرا می‌شود؛ فقط
+            افزونهٔ مورداعتماد نصب کن.
+          </p>
+          <code class="endpoint">inference.dahl.global / v1</code>
+        </div>
+        <label class="field-label" for="api-keys"
+          >کلیدهای تازه؛ هر کدام در یک خط</label
+        ><textarea
+          id="api-keys"
+          class="secret-input"
+          rows="5"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="فقط در نسخهٔ Windows وارد کن"
+        ></textarea
+        ><label class="check"
+          ><input id="remember" type="checkbox" /> نگهداری رمز‌شده با حفاظت حساب
+          Windows</label
+        ><button id="save-keys" class="primary full">
+          <svg class="icon"><use href="#i-shield" /></svg>ثبت امن کلیدها
+        </button>
+        <p id="keys-status" class="help"></p>
+        <button id="reset-keys" class="secondary full">
+          بازنشانی وضعیت سهمیهٔ کلیدها
+        </button>
+        <div class="callout">
+          جابه‌جایی خودکار فقط پس از اعلام صریح پایان سهمیهٔ کلید. خطای عمومی
+          429 یا رد مجوز، باعث تعویض کلید نمی‌شود. بازنشانی، درخواست زندهٔ بررسی
+          سهمیه نمی‌فرستد؛ در درخواست بعد دوباره امتحان می‌شود.
+        </div>
+        <p class="help warning-text">
+          کلیدی که قبلاً در چت فرستاده‌ای را در سرویس تعویض کن؛ ابطال آن از داخل
+          این برنامه انجام نمی‌شود.
+        </p>
+      </section>
+      <section data-drawer="browser" hidden>
+        <div class="drawer-intro">
+          <span class="large-tool-icon blue"
+            ><svg class="icon"><use href="#i-globe" /></svg
+          ></span>
+          <h3>Arena، پشت یک ابزار واقعی.</h3>
+          <p>
+            Chrome با پروفایل مستقل عامل باز می‌شود. خودت وارد شو، حالت Agent یا
+            گفتگوی تک‌مدلی و مخزن مجاز را انتخاب کن. مرورگر و کوکی‌های شخصی کپی
+            نمی‌شوند.
+          </p>
+        </div>
+        <button class="primary full" id="browser-login">
+          بازکردن Chrome و ورود
+          <svg class="icon"><use href="#i-external" /></svg></button
+        ><button class="secondary full" id="browser-close">
+          بستن مرورگر عامل
+        </button>
+        <p class="help" id="browser-status"></p>
+        <div class="callout">
+          رمز، MFA و CAPTCHA با توست. عامل می‌تواند درخواست را از کادر
+          قابل‌شناسایی Arena بفرستد و پاسخ قابل‌شناسایی را بخواند. تغییر ساختار
+          سایت یا محدودیت حساب می‌تواند این مسیر را متوقف کند؛ اتصال زندهٔ همهٔ
+          حالت‌ها تضمین نشده است.
+        </div>
+        <p class="help">
+          ترمینال و مخزن ابری Arena با سیستم محلی یکی نیست. مجوز مخزن در Arena
+          جدا از ورود GitHub محلی است.
+        </p>
+      </section>
+      <section data-drawer="github" hidden>
+        <div class="drawer-intro">
+          <span class="large-tool-icon neutral"
+            ><svg class="icon"><use href="#i-github" /></svg
+          ></span>
+          <h3>از مخزن تا ادامهٔ کار.</h3>
+          <p>
+            Git و gh رسمی همراه EXE هستند. با حساب خودت وارد شو؛ عامل می‌تواند
+            مخزن را دریافت، وضعیت را بررسی و تغییرات را با تأیید تو منتشر کند.
+          </p>
+        </div>
+        <div class="button-row">
+          <button id="github-check" class="primary">بررسی اتصال</button
+          ><button id="github-login" class="secondary">ورود در مرورگر</button>
+        </div>
+        <div id="device-box" class="device-box" hidden>
+          <label for="device-code">کد ورود، فقط برای github.com</label
+          ><input id="device-code" readonly /><button
+            id="github-device"
+            class="secondary full"
+          >
+            بازکردن صفحهٔ تأیید
+            <svg class="icon"><use href="#i-external" /></svg>
+          </button>
+        </div>
+        <pre id="github-status" class="help"></pre>
+        <div id="publish-preview"></div>
+        <div class="callout">
+          دریافت عمومی بدون ورود هم ممکن است. انتشار پیش‌نمایش و تأیید بومی
+          می‌خواهد. مخزن تازه خصوصی است؛ force-push، reset، merge خودکار PR یا
+          Release نداریم.
+        </div>
+      </section>
+      <section data-drawer="extensions" hidden>
+        <div class="drawer-intro">
+          <span class="large-tool-icon lime"
+            ><svg class="icon"><use href="#i-tools" /></svg
+          ></span>
+          <h3>روش کارِ مخصوص خودت.</h3>
+          <p>
+            Skill، راهنمای متنی Markdown/JSON است. Plugin، سرور استاندارد MCP
+            stdio محلی است. نصب با تأیید تو انجام می‌شود؛ فروشگاه یا دانلود
+            پنهان نرم‌افزار نداریم.
+          </p>
+        </div>
+        <button id="install-extension" class="primary full">
+          <svg class="icon"><use href="#i-plus" /></svg>نصب Skill یا Plugin محلی
+        </button>
+        <div id="extensions-list" class="extensions-list"></div>
+        <details class="manifest-example">
+          <summary>قالب manifest افزونهٔ MCP</summary>
+          <pre>
+{
   "kind": "mcp",
   "name": "My trusted plugin",
   "command": "C:\\path\\to\\server.exe",
   "args": []
-}</pre></details><div class="callout">افزونه sandbox نیست؛ Node/Python/uv و پیش‌نیازهای آن، اگر لازم باشند، باید نصب باشند. نام ابزار و Skill هرگز مجوزها را گسترش نمی‌دهد.</div></section>
-</aside><div id="toast" role="status" class="toast" hidden></div>
-</body></html>
+}</pre
+          >
+        </details>
+        <div class="callout">
+          افزونه sandbox نیست و با دسترسی واقعی کاربر کار می‌کند. Node/Python/uv
+          و پیش‌نیازهای موردنیازش باید نصب باشند. اطلاعات ورود و env secrets
+          داخل manifest نگذار. Skill و توضیح ابزار نمی‌توانند مجوزها را گسترش
+          بدهند.
+        </div>
+      </section>
+      <section data-drawer="help" hidden>
+        <div class="drawer-intro">
+          <span class="large-tool-icon lime"
+            ><svg class="icon"><use href="#i-orbit" /></svg
+          ></span>
+          <h3>این اتاق فرمان چطور کار می‌کند؟</h3>
+          <p>
+            تو دستور می‌دهی؛ مدل‌های Dahl تصمیم می‌گیرند کدام ابزار مجاز را
+            استفاده کنند. برنامه نتیجهٔ واقعی ابزار را ثبت می‌کند. یک تیم ترتیبی
+            داریم، نه عامل‌های نامحدود یا کنترل بی‌اجازهٔ کل سیستم.
+          </p>
+        </div>
+        <ol class="help-steps">
+          <li>کلید تازهٔ Dahl را داخل EXE ثبت کن.</li>
+          <li>پروژه را انتخاب کن؛ برای کار با Arena، وارد Chrome عامل شو.</li>
+          <li>یک مقصد دقیق بنویس و مجوز همین مأموریت را بررسی کن.</li>
+          <li>
+            برنامه، رویدادها و فایل‌های تأییدشده را ببین؛ هر وقت لازم شد توقف
+            کن.
+          </li>
+        </ol>
+        <div class="shortcut-list">
+          <span>فرمان سریع <kbd>Ctrl K</kbd></span
+          ><span>مأموریت جدید <kbd>Ctrl N</kbd></span
+          ><span>توقف کار <kbd>Ctrl Shift S</kbd></span
+          ><span>بستن پنل <kbd>Esc</kbd></span>
+        </div>
+        <div class="callout">
+          سقف هر اجرای کار: ۳۰ دقیقه و ۲۰ فراخوانی ابزار. اجرای دوباره مجوز تازه
+          می‌گیرد. گفتگوها فعلاً فقط در حافظهٔ همین اجرا هستند و پس از خروج باقی
+          نمی‌مانند. استفادهٔ زندهٔ Dahl/Arena و OAuth انسانی در تست‌های مصنوعی
+          تأیید نشده است.
+        </div>
+      </section>
+    </aside>
+    <div class="palette-backdrop" id="palette-backdrop" hidden></div>
+    <section
+      class="command-palette"
+      id="command-palette"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="command-label"
+      hidden
+    >
+      <label class="palette-input" id="command-label"
+        ><svg class="icon"><use href="#i-search" /></svg
+        ><input
+          id="command-search"
+          placeholder="کجا برویم؟ فرمان یا بخش را جستجو کن…"
+          autocomplete="off"
+        /><kbd>ESC</kbd></label
+      >
+      <div class="palette-results" id="command-results"></div>
+      <footer>
+        <span>↵ انتخاب فرمان</span
+        ><span>ابزارها فقط با مجوز در نسخهٔ Windows</span>
+      </footer>
+    </section>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>

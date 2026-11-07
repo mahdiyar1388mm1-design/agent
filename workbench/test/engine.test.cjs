@@ -71,3 +71,28 @@ test('context compaction never invents successful results or orphans interrupted
   const repaired = compactContext([{ role: 'user', content: 'Inspect' }, partial]); assert.equal(repaired.at(-1).tool_call_id, 'pending'); assert.match(repaired.at(-1).content, /unconfirmed/);
   const huge = compactContext([{ role: 'user', content: 'Inspect' }, partial, { role: 'tool', tool_call_id: 'pending', content: 'x'.repeat(130000) }, { role: 'assistant', content: 'Old trace was large' }]); assert.ok(JSON.stringify(huge).length < 120000); assert.equal(huge.some((m) => m.role === 'tool'), false);
 });
+
+test('structured model plans and real tool traces remain distinct in the engine', async () => {
+  const f = fixture([call('mission_plan', { steps: [{ title: 'Run tests', status: 'done' }] }), { message: { role: 'assistant', content: 'Claimed final result, not actual verification' } }]);
+  await f.engine.run(task, workspace); await f.engine.promise; const snapshot = f.engine.snapshot();
+  assert.equal(snapshot.mission.plan[0].status, 'done'); assert.equal(snapshot.mission.runs[0].name, 'mission_plan'); assert.equal(snapshot.mission.runs[0].status, 'returned'); assert.equal(snapshot.mission.artifacts.length, 0); assert.equal(f.invoked.length, 0);
+  snapshot.mission.plan[0].title = 'tampered'; assert.equal(f.engine.snapshot().mission.plan[0].title, 'Run tests');
+});
+test('actual failed execution is visible even if the model later claims completion', async () => {
+  const f = fixture([call('terminal_run', { command: 'Get-Date' }), { message: { role: 'assistant', content: 'Done' } }]);
+  f.tools.call = async () => ({ exitCode: 7, stdout: 'actual failure', stderr: '' });
+  await f.engine.run(task, workspace); await f.engine.promise;
+  assert.equal(f.engine.snapshot().status, 'completed'); assert.equal(f.engine.snapshot().mission.runs[0].status, 'error'); assert.match(f.engine.snapshot().mission.runs[0].output, /actual failure/);
+});
+test('stop during a launched tool records uncertainty, never a fabricated successful result', async () => {
+  const f = fixture([call('terminal_run', { command: 'Get-Date' })]);
+  f.tools.call = async (_name, _args, _workspace, signal) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+  await f.engine.run(task, workspace); await flush(); await f.engine.stop();
+  assert.equal(f.engine.snapshot().mission.runs[0].status, 'interrupted'); assert.equal(f.engine.snapshot().mission.artifacts.length, 0); assert.equal(f.engine.snapshot().mission.phase, 'stopped');
+});
+test('restoring a thread also restores its independent mission plan and trace, without running anything', async () => {
+  const f = fixture([call('mission_plan', { steps: [{ title: 'First plan', status: 'active' }] }), { message: { role: 'assistant', content: 'First' } }, { message: { role: 'assistant', content: 'Second' } }]);
+  await f.engine.run(task, workspace); await f.engine.promise; const first = f.engine.snapshot().id; f.engine.clear();
+  await f.engine.run({ ...task, task: 'Second mission' }, workspace); await f.engine.promise; assert.equal(f.engine.snapshot().mission.plan.length, 0);
+  const calls = f.models.length; f.engine.open(first, null); assert.equal(f.engine.snapshot().mission.plan[0].title, 'First plan'); assert.equal(f.models.length, calls);
+});

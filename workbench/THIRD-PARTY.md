@@ -4,6 +4,9 @@ Orbit Agent is an independent, unofficial local application, not endorsed by Are
 
 ## Added runtime components
 
+- **Vazirmatn Variable font** — Vazirmatn Project Authors, SIL Open Font License 1.1. Pinned fontsource distribution 5.3.0. Original source: https://github.com/rastikerdar/vazirmatn . Arabic and Latin WOFF2 subsets and the original OFL are included under `assets/fonts/`. No external font request is made.
+
+
 - **Playwright Core 1.65.0** — Microsoft Corporation, Apache License 2.0. Source: https://github.com/microsoft/playwright . License and notices are retained in the packaged production dependency. No Playwright browser distribution is bundled; the user installs Google Chrome separately. https://github.com/microsoft/playwright/blob/v1.65.0/LICENSE
 - **Model Context Protocol TypeScript SDK 1.32.2** — Anthropic, PBC, MIT License. Source: https://github.com/modelcontextprotocol/typescript-sdk . Its MIT license and licenses of production dependencies are retained in the packaged application. https://github.com/modelcontextprotocol/typescript-sdk/blob/main/LICENSE
 

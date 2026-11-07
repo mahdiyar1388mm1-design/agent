@@ -4,7 +4,7 @@ module.exports = {
   appId: 'io.github.mahdiyar1388mm1.orbit-agent', productName: 'Orbit Agent', copyright: 'Unofficial independent local workbench. Not affiliated with Arena or Dahl.',
   asar: true, npmRebuild: false, compression: 'maximum', electronDownload: { checksums: require('electron/checksums.json') },
   directories: { output: 'dist', buildResources: 'assets' },
-  files: ['src/**/*', 'assets/icon.png', 'assets/icon.ico', 'README.md', 'THIRD-PARTY.md', 'package.json',
+  files: ['src/**/*', 'assets/icon.png', 'assets/icon.ico', 'assets/fonts/**/*', 'README.md', 'THIRD-PARTY.md', 'package.json',
     { from: '../desktop/src', to: 'src/shared', filter: shared }, { from: '../desktop/GITHUB.md', to: 'GITHUB.md' }],
   extraResources: [{ from: '../desktop/build/portable-tools/tools', to: 'tools' }],
   electronFuses: { runAsNode: false, enableCookieEncryption: true, enableNodeOptionsEnvironmentVariable: false, enableNodeCliInspectArguments: false, enableEmbeddedAsarIntegrityValidation: true, onlyLoadAppFromAsar: true },

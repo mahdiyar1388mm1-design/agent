@@ -1,9 +1,10 @@
 'use strict';
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, net, session, shell, Menu, Tray } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, net, session, shell, Menu, Tray, clipboard } = require('electron');
 const { KeyVault } = require('./vault.cjs');
 const { DahlClient, MODELS } = require('./dahl.cjs');
+const { ProjectView } = require('./project-view.cjs');
 const { Workspace } = require('./workspace.cjs');
 const { Permissions } = require('./permissions.cjs');
 const { AgentBrowser } = require('./browser.cjs');
@@ -20,7 +21,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'Orbit-Agent'));
 const ICON = path.join(__dirname, '../assets/icon.png');
 function state() {
   const g = github?.snapshot();
-  return { version: app.getVersion(), platform: process.platform, models: MODELS, keys: vault?.status(), pool: client?.status(), project: workspace.root,
+  return { version: app.getVersion(), platform: process.platform, models: MODELS, capabilities: tools?.definitions(Boolean(workspace.root)).map((tool) => tool.function.name) || [], keys: vault?.status(), pool: client?.status(), project: workspace.root,
     engine: engine?.snapshot(), browser: browser?.status(), extensions: extensions?.status() || [], setupBusy, warning,
     github: g ? { status: g.status, busy: g.busy, account: g.account?.login || null, deviceCode: g.deviceCode, message: g.message,
       dependencies: { git: Boolean(g.dependencies.git), gh: Boolean(g.dependencies.gh) }, sources: g.toolSources, preview: g.preview } : null };
@@ -32,28 +33,33 @@ async function confirm(title, detail, button = 'می‌پذیرم', signal = eng
     buttons: [button, 'لغو'], defaultId: 1, cancelId: 1, noLink: true, signal }); return answer.response === 0;
 }
 function trusted(event) { return Boolean(window && !window.isDestroyed() && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === URL); }
-const ACTIONS = new Set(['keys-save', 'keys-reset', 'project-choose', 'run', 'stop', 'new', 'open-task', 'browser-login', 'browser-close', 'github-check', 'github-login', 'github-device', 'extension-install', 'extension-remove']);
+const ACTIONS = new Set(['keys-save', 'keys-reset', 'project-choose', 'project-list', 'project-read', 'project-open', 'copy-text', 'run', 'stop', 'new', 'open-task', 'browser-login', 'browser-close', 'github-check', 'github-login', 'github-device', 'extension-install', 'extension-remove']);
 async function action(name, payload) {
   if (name === 'stop') { await engine.stop(); publish(); return state(); }
+  if (['project-list', 'project-read'].includes(name)) return new ProjectView({ workspace: () => workspace, clean: (text) => vault.clean(text) }).handle(name, payload);
+  if (name === 'project-open') { const folder = workspace.resolve('.'); const error = await shell.openPath(folder); if (error) throw new Error('بازکردن پوشه در Explorer انجام نشد.'); return { opened: true }; }
+  if (name === 'copy-text') { if (typeof payload?.text !== 'string' || payload.text.length > 32000) throw new Error('متن قابل کپی نیست.'); clipboard.writeText(vault.clean(payload.text)); return { copied: true }; }
   if (name === 'github-device') { if (!github.state.deviceCode) throw new Error('کد ورود فعالی وجود ندارد.'); await shell.openExternal('https://github.com/login/device'); return state(); }
   if (engine.promise || setupBusy || github.busy) throw new Error('ابتدا کار/ورود جاری را متوقف یا کامل کنید.');
   switch (name) {
     case 'keys-save': vault.save(payload?.keys, payload?.remember); client.reset(); break;
     case 'keys-reset': client.reset(); break;
     case 'project-choose': {
+      setupBusy = true; publish(); try {
       const result = await dialog.showOpenDialog(window, { title: 'انتخاب پوشهٔ پروژهٔ عامل', properties: ['openDirectory'] });
-      if (!result.canceled && result.filePaths.length === 1) { permissions.revoke(); workspace = new Workspace(result.filePaths[0]); engine.clear(); } break;
+      if (!result.canceled && result.filePaths.length === 1) { permissions.revoke(); workspace = new Workspace(result.filePaths[0]); engine.clear(); } } finally { setupBusy = false; publish(); } break;
     }
     case 'run': if (!vault.keys.length) throw new Error('کلید تازهٔ Dahl را فقط در تنظیمات امن وارد کنید.'); await engine.run(payload, workspace); break;
     case 'new': engine.clear(); break;
     case 'open-task': engine.open(payload?.id, workspace.root); break;
-    case 'browser-login': setupBusy = true; publish(); try { await browser.login(); warning = 'در Chrome جداگانه وارد Arena شوید و گفتگو/Agent و مخزن مجاز را انتخاب کنید؛ سپس به Orbit برگردید. رمز و CAPTCHA را خودتان انجام دهید.'; } finally { setupBusy = false; } break;
+    case 'browser-login': setupBusy = true; publish(); try { await browser.login(); warning = 'در Chrome جداگانه وارد Arena شوید و گفتگو/Agent و مخزن مجاز را انتخاب کنید؛ سپس به Orbit برگردید. رمز و CAPTCHA را خودتان انجام دهید.'; } finally { setupBusy = false; publish(); } break;
     case 'browser-close': await browser.close(); break;
     case 'github-check': await github.check(); break;
     case 'github-login': await github.login(); break;
     case 'extension-install': {
+      setupBusy = true; publish(); try {
       const result = await dialog.showOpenDialog(window, { title: 'نصب Skill متنی یا manifest افزونهٔ MCP مورداعتماد', properties: ['openFile'], filters: [{ name: 'Skill / MCP manifest', extensions: ['json', 'md'] }] });
-      if (!result.canceled && result.filePaths.length === 1) await extensions.install(result.filePaths[0]); break;
+      if (!result.canceled && result.filePaths.length === 1) await extensions.install(result.filePaths[0]); } finally { setupBusy = false; publish(); } break;
     }
     case 'extension-remove': await extensions.remove(payload?.id); break;
     default: throw new Error('عمل مجاز نیست.');
@@ -67,7 +73,7 @@ function makeTray() {
     { type: 'separator' }, { label: 'خروج و توقف', click: () => { quitting = true; app.quit(); } }]));
 }
 function createWindow() {
-  window = new BrowserWindow({ width: 1450, height: 930, minWidth: 980, minHeight: 680, backgroundColor: '#121619', icon: ICON, show: false,
+  window = new BrowserWindow({ width: 1540, height: 980, minWidth: 980, minHeight: 700, backgroundColor: '#0b0e15', icon: ICON, show: false,
     title: 'Orbit Agent', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, webviewTag: false, backgroundThrottling: false } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -77,7 +83,7 @@ function createWindow() {
   window.webContents.once('did-finish-load', () => {
     publish();
     if (app.commandLine.hasSwitch('orbit-self-test')) {
-      void require('./native-check.cjs').run({ window, resourcesPath: process.resourcesPath, getState: state }).then(() => { console.log('ORBIT_NATIVE_SELF_TEST_OK'); quitting = true; app.exit(0); }).catch((error) => { console.error('ORBIT_NATIVE_SELF_TEST_FAILED', vault.clean(error.message)); app.exit(1); });
+      void require('./native-check.cjs').run({ window, resourcesPath: process.resourcesPath, getState: state }).then(() => { console.log('ORBIT_NATIVE_SELF_TEST_OK'); quitting = true; app.exit(0); }).catch((error) => { console.error('ORBIT_NATIVE_SELF_TEST_FAILED', vault.clean(error.stack || error.message)); app.exit(1); });
     }
   });
   window.on('close', (event) => {
@@ -101,7 +107,7 @@ else {
   ipcMain.handle('orbit:state', (event) => { if (!trusted(event)) throw new Error('Untrusted frame'); return state(); });
   ipcMain.handle('orbit:action', async (event, name, payload) => {
     if (!trusted(event) || !ACTIONS.has(name) || Buffer.byteLength(JSON.stringify(payload ?? {})) > 65536) throw new Error('Untrusted action');
-    try { return await action(name, payload); } catch (error) { throw new Error(vault.clean(error.message)); }
+    try { return await action(name, payload); } catch (error) { publish(); throw new Error(vault.clean(error.message)); }
   });
   app.whenReady().then(async () => {
     app.setAppUserModelId('io.github.mahdiyar1388mm1.orbit-agent');

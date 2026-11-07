@@ -46,6 +46,18 @@ jobs:
             }
             exit $result
           }
+      - name: Browser UI and responsive interactions
+        working-directory: workbench
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          & npm.cmd run test:ui 2>&1 | Tee-Object -FilePath ui-check.log
+          $result = $LASTEXITCODE
+          if ($result -ne 0) {
+            $detail = ((Get-Content ui-check.log -Tail 25) -join "`n").Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::error title=Orbit UI check::$detail"
+            exit $result
+          }
       - name: Verify actual packaged Windows tools and Chrome delegation
         working-directory: workbench
         shell: pwsh
@@ -55,6 +67,13 @@ jobs:
             Write-Output "::error title=Orbit native check failed::$detail"
             exit 1
           }
+      - name: Upload UI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-Agent-UI-preview
+          path: workbench/build/ui-check/*.png
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload EXE, checksum and documentation
         uses: actions/upload-artifact@v4
         with:
